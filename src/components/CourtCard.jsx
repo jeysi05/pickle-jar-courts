@@ -77,7 +77,7 @@ export default function CourtCard({ courtName, image, isCoachMode }) {
       </div>
 
       {/* 2. Date Selection - FIXED CUTOFF */}
-      <div className="px-5 pt-4">
+      <div className="px-3 pt-2">
         <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
           <Calendar className={`w-3 h-3 ${isCoachMode ? 'text-yellow-400' : 'text-lime-400'}`} /> Select Date
         </label>
