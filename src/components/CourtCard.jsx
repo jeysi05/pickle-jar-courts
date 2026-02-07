@@ -11,7 +11,6 @@ const TIME_SLOTS = [
   "11:00 PM", "12:00 MN"
 ];
 
-// --- PRICING CONFIGURATION ---
 const RATES = {
   STANDARD: 300, 
   COACH: 250,    
@@ -58,7 +57,7 @@ export default function CourtCard({ courtName, image, isCoachMode }) {
   return (
     <div className={`relative w-full max-w-sm mx-auto bg-zinc-900 border rounded-3xl shadow-2xl overflow-hidden flex flex-col transition-all duration-300 group hover:-translate-y-1 ${isCoachMode ? 'border-yellow-500/30 hover:border-yellow-400' : 'border-zinc-800 hover:border-lime-500/50'}`}>
       
-      {/* 1. Header Image (Shorter on Mobile: h-36) */}
+      {/* 1. Header Image */}
       <div className="h-36 md:h-44 relative overflow-hidden shrink-0">
         <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-transparent z-10" />
         <img src={image} alt={courtName} className="w-full h-full object-cover"/>
@@ -77,8 +76,8 @@ export default function CourtCard({ courtName, image, isCoachMode }) {
         </div>
       </div>
 
-      {/* 2. Date Selection (Compact Padding) */}
-      <div className="px-4 pt-3 md:px-5 md:pt-4">
+      {/* 2. Date Selection (FIXED FOR MOBILE) */}
+      <div className="px-3 pt-3 md:px-5 md:pt-4">
         <div className="relative">
           <input 
             type="date" 
@@ -88,13 +87,13 @@ export default function CourtCard({ courtName, image, isCoachMode }) {
               setSelectedSlots([]); 
             }}
             style={{ colorScheme: 'dark' }} 
-            // Changed: smaller text on mobile (text-xs), tighter padding (py-2)
-            className={`w-full bg-zinc-950 border text-white text-xs md:text-sm font-bold rounded-xl px-4 py-2.5 md:py-3 focus:outline-none focus:ring-1 transition-all cursor-pointer hover:bg-zinc-800 ${isCoachMode ? 'border-zinc-700 focus:border-yellow-400 focus:ring-yellow-400' : 'border-zinc-700 focus:border-lime-500 focus:ring-lime-500'}`}
+            // FIX: Added 'min-w-0' and reduced padding (px-2) to stop cutoff
+            className={`w-full min-w-0 bg-zinc-950 border text-white text-xs md:text-sm font-bold rounded-xl px-2 py-2.5 md:px-4 md:py-3 focus:outline-none focus:ring-1 transition-all cursor-pointer hover:bg-zinc-800 ${isCoachMode ? 'border-zinc-700 focus:border-yellow-400 focus:ring-yellow-400' : 'border-zinc-700 focus:border-lime-500 focus:ring-lime-500'}`}
           />
         </div>
       </div>
 
-      {/* 3. Time Slots Grid (4 Columns on Mobile) */}
+      {/* 3. Time Slots Grid */}
       <div className="px-4 py-3 md:px-5 md:py-4">
         <div className="flex items-center justify-between mb-2">
           <label className="flex items-center gap-2 text-[9px] md:text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
@@ -108,7 +107,6 @@ export default function CourtCard({ courtName, image, isCoachMode }) {
           )}
         </div>
 
-        {/* CHANGE: grid-cols-4 on mobile (tight fit), grid-cols-3 on desktop */}
         <div className="grid grid-cols-4 md:grid-cols-3 gap-1.5 md:gap-2 w-full">
           {TIME_SLOTS.map((slot, index) => {
             const isTaken = bookedTimes.includes(slot);
@@ -119,7 +117,6 @@ export default function CourtCard({ courtName, image, isCoachMode }) {
                 key={index}
                 disabled={isTaken}
                 onClick={() => toggleSlot(slot)}
-                // Changed: text-[9px] for mobile to fit in 4 cols
                 className={`
                   relative py-2 rounded-lg text-[9px] md:text-[10px] font-bold transition-all border
                   ${isTaken 
@@ -132,7 +129,6 @@ export default function CourtCard({ courtName, image, isCoachMode }) {
                   }
                 `}
               >
-                {/* Remove the space (08:00 AM -> 08:00AM) to save width */}
                 {slot.replace(" ", "")}
               </button>
             );

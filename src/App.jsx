@@ -42,53 +42,53 @@ function App() {
       {/* CONTENT WRAPPER */}
       <div className="relative z-10 pb-20">
         
-        {/* NAVBAR */}
-<nav className="border-b border-white/5 backdrop-blur-sm sticky top-0 z-50 bg-zinc-950/80">
-  <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
-    
-    {/* LOGO SECTION */}
-    <div className="flex items-center gap-2">
-      <div className={`h-10 w-10 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(163,230,53,0.3)] ${isCoachMode ? 'bg-yellow-400' : 'bg-lime-400'}`}>
-        <span className="text-zinc-950 font-black text-xl">P</span>
-      </div>
-      {/* Shorten name on mobile, show full on desktop */}
-      <span className="font-bold text-white text-lg tracking-tight">
-        <span className="md:hidden">Pickle<span className={isCoachMode ? 'text-yellow-400' : 'text-lime-400'}>Jar</span></span>
-        <span className="hidden md:inline">Pickle<span className={isCoachMode ? 'text-yellow-400' : 'text-lime-400'}>JarCourts</span></span>
-      </span>
-    </div>
-    
-    {/* BUTTONS SECTION */}
-    <div className="flex gap-3">
-      
-      {/* COACH BUTTON: Visible on Mobile now (Icon only) */}
-      {isCoachMode ? (
-         <button 
-           onClick={handleExitCoachMode}
-           className="flex items-center gap-2 text-xs font-bold text-red-400 bg-red-500/10 px-3 py-2 rounded-full border border-red-500/20"
-         >
-           <LogOut size={14} /> <span className="hidden md:inline">EXIT</span>
-         </button>
-      ) : (
-        <button 
-          onClick={handleCoachLogin}
-          // REMOVED 'hidden' class here so it shows on mobile
-          className="flex items-center gap-2 text-xs font-bold text-zinc-500 hover:text-yellow-400 transition-colors uppercase tracking-widest bg-zinc-900/50 px-3 py-2 rounded-lg border border-white/5"
-        >
-          <Lock size={14} /> <span className="hidden md:inline">Coach</span>
-        </button>
-      )}
+        {/* NAVBAR (FIXED OVERFLOW) */}
+        <nav className="border-b border-white/5 backdrop-blur-sm sticky top-0 z-50 bg-zinc-950/80">
+          <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
+            
+            {/* LOGO SECTION */}
+            <div className="flex items-center gap-2">
+              {/* FIX: Smaller logo (h-8 w-8) on mobile */}
+              <div className={`h-8 w-8 md:h-10 md:w-10 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(163,230,53,0.3)] ${isCoachMode ? 'bg-yellow-400' : 'bg-lime-400'}`}>
+                <span className="text-zinc-950 font-black text-lg md:text-xl">P</span>
+              </div>
+              {/* FIX: Smaller text (text-base) on mobile */}
+              <span className="font-bold text-white text-base md:text-lg tracking-tight">
+                <span className="md:hidden">Pickle<span className={isCoachMode ? 'text-yellow-400' : 'text-lime-400'}>Jar</span></span>
+                <span className="hidden md:inline">Pickle<span className={isCoachMode ? 'text-yellow-400' : 'text-lime-400'}>JarCourts</span></span>
+              </span>
+            </div>
+            
+            {/* BUTTONS SECTION */}
+            <div className="flex gap-2 md:gap-3">
+              
+              {isCoachMode ? (
+                 <button 
+                   onClick={handleExitCoachMode}
+                   className="flex items-center gap-2 text-[10px] md:text-xs font-bold text-red-400 bg-red-500/10 px-2 py-1.5 md:px-3 md:py-2 rounded-full border border-red-500/20"
+                 >
+                   <LogOut size={14} /> <span className="hidden md:inline">EXIT</span>
+                 </button>
+              ) : (
+                <button 
+                  onClick={handleCoachLogin}
+                  // FIX: Reduced padding (px-2) and text size
+                  className="flex items-center gap-2 text-[10px] md:text-xs font-bold text-zinc-500 hover:text-yellow-400 transition-colors uppercase tracking-widest bg-zinc-900/50 px-2 py-1.5 md:px-3 md:py-2 rounded-lg border border-white/5"
+                >
+                  <Lock size={14} /> <span className="hidden md:inline">Coach</span>
+                </button>
+              )}
 
-      {/* ADMIN BUTTON */}
-      <button 
-        onClick={() => setIsAdminMode(true)}
-        className="text-xs font-bold text-zinc-500 hover:text-lime-400 transition-colors uppercase tracking-widest flex items-center gap-2 bg-zinc-900/50 px-3 py-2 rounded-lg border border-white/5"
-      >
-        <ShieldCheck size={14} /> <span className="hidden md:inline">Admin</span>
-      </button>
-    </div>
-  </div>
-</nav>
+              <button 
+                onClick={() => setIsAdminMode(true)}
+                // FIX: Reduced padding (px-2) and text size
+                className="text-[10px] md:text-xs font-bold text-zinc-500 hover:text-lime-400 transition-colors uppercase tracking-widest flex items-center gap-2 bg-zinc-900/50 px-2 py-1.5 md:px-3 md:py-2 rounded-lg border border-white/5"
+              >
+                <ShieldCheck size={14} /> <span className="hidden md:inline">Admin</span>
+              </button>
+            </div>
+          </div>
+        </nav>
 
         {/* HERO SECTION */}
         <div className="pt-16 pb-24 text-center px-4">
@@ -100,7 +100,7 @@ function App() {
             {isCoachMode ? "Coach Rates Active" : "Live Bookings Active"}
           </div>
 
-          <h1 className="text-5xl md:text-7xl font-black text-white mb-6 tracking-tighter">
+          <h1 className="text-4xl md:text-7xl font-black text-white mb-6 tracking-tighter">
             {isCoachMode ? "TRAIN THE" : "RESERVE YOUR"} <br className="hidden md:block" />
             <span className={`text-transparent bg-clip-text bg-gradient-to-r ${isCoachMode ? 'from-yellow-300 to-orange-400' : 'from-lime-300 to-emerald-400'}`}>
               {isCoachMode ? "NEXT CHAMPIONS" : "WINNING MOMENT"}
