@@ -43,50 +43,52 @@ function App() {
       <div className="relative z-10 pb-20">
         
         {/* NAVBAR */}
-        <nav className="border-b border-white/5 backdrop-blur-sm sticky top-0 z-50 bg-zinc-950/80">
-          <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {/* Logo Icon */}
-              <div className={`h-10 w-10 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(163,230,53,0.3)] ${isCoachMode ? 'bg-yellow-400' : 'bg-lime-400'}`}>
-                <span className="text-zinc-950 font-black text-xl">P</span>
-              </div>
-              
-              {/* --- NAME CHANGE: PickleJarCourts --- */}
-              <span className="font-bold text-white text-xl tracking-tight hidden sm:block">
-                Pickle<span className={isCoachMode ? 'text-yellow-400' : 'text-lime-400'}>JarCourts</span>
-                {isCoachMode && <span className="ml-2 text-[10px] bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded uppercase tracking-widest border border-yellow-500/30">Coach Portal</span>}
-              </span>
-            </div>
-            
-            <div className="flex gap-4">
-              
-              {/* COACH BUTTONS */}
-              {isCoachMode ? (
-                 <button 
-                   onClick={handleExitCoachMode}
-                   className="flex items-center gap-2 text-xs font-bold text-red-400 hover:text-red-300 transition-colors uppercase tracking-widest bg-red-500/10 px-4 py-2 rounded-full border border-red-500/20"
-                 >
-                   <LogOut size={12} /> Exit Coach View
-                 </button>
-              ) : (
-                <button 
-                  onClick={handleCoachLogin}
-                  className="hidden md:flex items-center gap-2 text-xs font-bold text-zinc-500 hover:text-yellow-400 transition-colors uppercase tracking-widest"
-                >
-                  <Lock size={12} /> Coach Access
-                </button>
-              )}
+<nav className="border-b border-white/5 backdrop-blur-sm sticky top-0 z-50 bg-zinc-950/80">
+  <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
+    
+    {/* LOGO SECTION */}
+    <div className="flex items-center gap-2">
+      <div className={`h-10 w-10 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(163,230,53,0.3)] ${isCoachMode ? 'bg-yellow-400' : 'bg-lime-400'}`}>
+        <span className="text-zinc-950 font-black text-xl">P</span>
+      </div>
+      {/* Shorten name on mobile, show full on desktop */}
+      <span className="font-bold text-white text-lg tracking-tight">
+        <span className="md:hidden">Pickle<span className={isCoachMode ? 'text-yellow-400' : 'text-lime-400'}>Jar</span></span>
+        <span className="hidden md:inline">Pickle<span className={isCoachMode ? 'text-yellow-400' : 'text-lime-400'}>JarCourts</span></span>
+      </span>
+    </div>
+    
+    {/* BUTTONS SECTION */}
+    <div className="flex gap-3">
+      
+      {/* COACH BUTTON: Visible on Mobile now (Icon only) */}
+      {isCoachMode ? (
+         <button 
+           onClick={handleExitCoachMode}
+           className="flex items-center gap-2 text-xs font-bold text-red-400 bg-red-500/10 px-3 py-2 rounded-full border border-red-500/20"
+         >
+           <LogOut size={14} /> <span className="hidden md:inline">EXIT</span>
+         </button>
+      ) : (
+        <button 
+          onClick={handleCoachLogin}
+          // REMOVED 'hidden' class here so it shows on mobile
+          className="flex items-center gap-2 text-xs font-bold text-zinc-500 hover:text-yellow-400 transition-colors uppercase tracking-widest bg-zinc-900/50 px-3 py-2 rounded-lg border border-white/5"
+        >
+          <Lock size={14} /> <span className="hidden md:inline">Coach</span>
+        </button>
+      )}
 
-              {/* ADMIN BUTTON */}
-              <button 
-                onClick={() => setIsAdminMode(true)}
-                className="text-xs font-bold text-zinc-500 hover:text-lime-400 transition-colors uppercase tracking-widest flex items-center gap-2"
-              >
-                <ShieldCheck size={12} /> Admin
-              </button>
-            </div>
-          </div>
-        </nav>
+      {/* ADMIN BUTTON */}
+      <button 
+        onClick={() => setIsAdminMode(true)}
+        className="text-xs font-bold text-zinc-500 hover:text-lime-400 transition-colors uppercase tracking-widest flex items-center gap-2 bg-zinc-900/50 px-3 py-2 rounded-lg border border-white/5"
+      >
+        <ShieldCheck size={14} /> <span className="hidden md:inline">Admin</span>
+      </button>
+    </div>
+  </div>
+</nav>
 
         {/* HERO SECTION */}
         <div className="pt-16 pb-24 text-center px-4">
