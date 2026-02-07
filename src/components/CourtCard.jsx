@@ -57,8 +57,8 @@ export default function CourtCard({ courtName, image, isCoachMode }) {
   return (
     <div className={`relative w-full max-w-sm mx-auto bg-zinc-900 border rounded-3xl shadow-2xl overflow-hidden flex flex-col transition-all duration-300 group hover:-translate-y-1 ${isCoachMode ? 'border-yellow-500/30 hover:border-yellow-400' : 'border-zinc-800 hover:border-lime-500/50'}`}>
       
-      {/* 1. Header Image */}
-      <div className="h-36 md:h-44 relative overflow-hidden shrink-0">
+      {/* 1. Header Image - Reduced height on mobile */}
+      <div className="h-40 md:h-44 relative overflow-hidden shrink-0">
         <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-transparent z-10" />
         <img src={image} alt={courtName} className="w-full h-full object-cover"/>
         
@@ -76,8 +76,11 @@ export default function CourtCard({ courtName, image, isCoachMode }) {
         </div>
       </div>
 
-      {/* 2. Date Selection (FIXED FOR MOBILE) */}
-      <div className="px-3 pt-3 md:px-5 md:pt-4">
+      {/* 2. Date Selection - FIXED CUTOFF */}
+      <div className="px-5 pt-4">
+        <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
+          <Calendar className={`w-3 h-3 ${isCoachMode ? 'text-yellow-400' : 'text-lime-400'}`} /> Select Date
+        </label>
         <div className="relative">
           <input 
             type="date" 
@@ -87,27 +90,28 @@ export default function CourtCard({ courtName, image, isCoachMode }) {
               setSelectedSlots([]); 
             }}
             style={{ colorScheme: 'dark' }} 
-            // FIX: Added 'min-w-0' and reduced padding (px-2) to stop cutoff
-            className={`w-full min-w-0 bg-zinc-950 border text-white text-xs md:text-sm font-bold rounded-xl px-2 py-2.5 md:px-4 md:py-3 focus:outline-none focus:ring-1 transition-all cursor-pointer hover:bg-zinc-800 ${isCoachMode ? 'border-zinc-700 focus:border-yellow-400 focus:ring-yellow-400' : 'border-zinc-700 focus:border-lime-500 focus:ring-lime-500'}`}
+            // Added 'text-center' and adjusted padding/text-size for mobile fit
+            className={`w-full bg-zinc-950 border text-white text-sm font-bold rounded-xl px-4 py-3 text-center focus:outline-none focus:ring-1 transition-all cursor-pointer hover:bg-zinc-800 ${isCoachMode ? 'border-zinc-700 focus:border-yellow-400 focus:ring-yellow-400' : 'border-zinc-700 focus:border-lime-500 focus:ring-lime-500'}`}
           />
         </div>
       </div>
 
-      {/* 3. Time Slots Grid */}
-      <div className="px-4 py-3 md:px-5 md:py-4">
-        <div className="flex items-center justify-between mb-2">
-          <label className="flex items-center gap-2 text-[9px] md:text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+      {/* 3. Time Slots Grid - 4 COLS ON MOBILE */}
+      <div className="px-5 py-4">
+        <div className="flex items-center justify-between mb-3">
+          <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
             <Clock className={`w-3 h-3 ${isCoachMode ? 'text-yellow-400' : 'text-lime-400'}`} /> Available Slots
           </label>
           
           {selectedSlots.length > 0 && (
-            <span className={`text-[9px] md:text-[10px] font-mono font-bold animate-pulse ${isCoachMode ? 'text-yellow-400' : 'text-lime-400'}`}>
+            <span className={`text-[10px] font-mono font-bold animate-pulse ${isCoachMode ? 'text-yellow-400' : 'text-lime-400'}`}>
               {selectedSlots.length} Selected
             </span>
           )}
         </div>
 
-        <div className="grid grid-cols-4 md:grid-cols-3 gap-1.5 md:gap-2 w-full">
+        {/* CHANGED: grid-cols-4 on mobile to save vertical space */}
+        <div className="grid grid-cols-4 md:grid-cols-3 gap-2 w-full">
           {TIME_SLOTS.map((slot, index) => {
             const isTaken = bookedTimes.includes(slot);
             const isSelected = selectedSlots.includes(slot);
@@ -117,6 +121,7 @@ export default function CourtCard({ courtName, image, isCoachMode }) {
                 key={index}
                 disabled={isTaken}
                 onClick={() => toggleSlot(slot)}
+                // Smaller text on mobile to fit 4 cols
                 className={`
                   relative py-2 rounded-lg text-[9px] md:text-[10px] font-bold transition-all border
                   ${isTaken 
@@ -125,10 +130,11 @@ export default function CourtCard({ courtName, image, isCoachMode }) {
                       ? isCoachMode 
                         ? 'bg-yellow-400 text-black border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)] scale-105 z-10'
                         : 'bg-lime-400 text-black border-lime-400 shadow-[0_0_15px_rgba(163,230,53,0.5)] scale-105 z-10'
-                      : `bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-white hover:bg-zinc-700 ${isCoachMode ? 'hover:border-yellow-400' : 'hover:border-lime-400'}`
+                      : `bg-zinc-800 text-zinc-300 border-zinc-700 hover:text-white hover:bg-zinc-700 ${isCoachMode ? 'hover:border-yellow-400' : 'hover:border-lime-400'}`
                   }
                 `}
               >
+                {/* Remove spaces to fit: "08:00 AM" -> "08:00AM" */}
                 {slot.replace(" ", "")}
               </button>
             );
@@ -137,12 +143,12 @@ export default function CourtCard({ courtName, image, isCoachMode }) {
       </div>
 
       {/* 4. Footer */}
-      <div className="p-4 md:p-5 mt-auto border-t border-white/5 bg-zinc-900/50">
+      <div className="p-5 mt-auto border-t border-white/5 bg-zinc-900/50">
         <button 
           disabled={selectedSlots.length === 0}
           onClick={() => setIsModalOpen(true)}
           className={`
-            w-full py-3 md:py-4 rounded-xl font-bold uppercase tracking-widest text-[10px] md:text-xs transition-all duration-300
+            w-full py-4 rounded-xl font-bold uppercase tracking-widest text-xs transition-all duration-300
             flex items-center justify-center gap-2
             ${selectedSlots.length > 0
               ? isCoachMode 
@@ -161,7 +167,7 @@ export default function CourtCard({ courtName, image, isCoachMode }) {
                  </span>
                </span>
                <div className="flex items-center gap-1">
-                 <span className="text-base md:text-lg font-black">₱{totalPrice}</span>
+                 <span className="text-lg font-black">₱{totalPrice}</span>
                  <ChevronRight className="w-4 h-4" />
                </div>
             </div>
