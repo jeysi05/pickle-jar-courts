@@ -44,18 +44,39 @@ export default function AdminDashboard({ onLogout }) {
     }
   };
 
-  const addToGoogleCalendar = (booking) => {
+  // --- 4. SAFE GOOGLE CALENDAR URL GENERATOR ---
+  // Returns a STRING URL instead of opening a window
+  const getGoogleCalendarUrl = (booking) => {
     const { court, date, timeSlot, customerName } = booking;
-    const startTime = new Date(`${date} ${timeSlot}`);
-    const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); 
-    const formatTime = (dateObj) => dateObj.toISOString().replace(/-|:|\.\d\d\d/g, "");
-    const start = formatTime(startTime);
-    const end = formatTime(endTime);
-    const title = encodeURIComponent(`🎾 BOOKING: ${customerName} (${court})`);
-    const details = encodeURIComponent(`Approved Booking.\nPlayer: ${customerName}\nCourt: ${court}\nTime: ${timeSlot}`);
-    const location = encodeURIComponent("Pickle Jar Courts, Laguna");
-    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}&location=${location}`;
-    window.open(url, '_blank');
+    
+    try {
+      // Manual Parse (Fixes "Invalid Date" on Safari/iOS)
+      // Expects date: "2026-02-08" and timeSlot: "08:00 AM"
+      const [year, month, day] = date.split('-');
+      let [time, modifier] = timeSlot.split(' ');
+      let [hours, minutes] = time.split(':');
+
+      let h = parseInt(hours, 10);
+      if (h === 12 && modifier === 'AM') h = 0;
+      if (h !== 12 && modifier === 'PM') h += 12;
+
+      const startTime = new Date(year, month - 1, day, h, parseInt(minutes, 10));
+      const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Add 1 hour
+
+      const formatTime = (d) => d.toISOString().replace(/-|:|\.\d\d\d/g, "");
+
+      const start = formatTime(startTime);
+      const end = formatTime(endTime);
+
+      const title = encodeURIComponent(`🎾 BOOKING: ${customerName} (${court})`);
+      const details = encodeURIComponent(`Approved Booking.\nPlayer: ${customerName}\nCourt: ${court}\nTime: ${timeSlot}`);
+      const location = encodeURIComponent("Pickle Jar Courts, Laguna");
+
+      return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}&location=${location}`;
+    } catch (e) {
+      console.error("Date Error", e);
+      return "#";
+    }
   };
 
   // --- RENDER: LOGIN SCREEN ---
@@ -85,7 +106,6 @@ export default function AdminDashboard({ onLogout }) {
             Access Dashboard
           </button>
           
-          {/* --- NEW BUTTON: BACK TO HOME --- */}
           <button onClick={onLogout} type="button" className="w-full mt-6 text-zinc-500 text-xs hover:text-white font-bold uppercase tracking-widest flex items-center justify-center gap-2">
             <ArrowLeft size={12} /> Back to Website
           </button>
@@ -121,7 +141,6 @@ export default function AdminDashboard({ onLogout }) {
               <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Revenue</span>
             </div>
             
-            {/* --- NEW BUTTON: BACK TO HOME --- */}
             <button onClick={onLogout} className="flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-6 py-3 rounded-2xl transition uppercase tracking-widest">
               <ArrowLeft size={14} /> Back to Home
             </button>
@@ -187,12 +206,16 @@ export default function AdminDashboard({ onLogout }) {
 
                   {(booking.status === 'APPROVED' || booking.status === 'CONFIRMED') && (
                     <div className="w-full space-y-2">
-                      <button 
-                        onClick={() => addToGoogleCalendar(booking)}
-                        className="w-full bg-zinc-800 hover:bg-white hover:text-black text-white border border-zinc-700 font-bold py-3 rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
+                      {/* FIX: Use an Anchor tag <a> instead of button */}
+                      <a 
+                        href={getGoogleCalendarUrl(booking)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full bg-zinc-800 hover:bg-white hover:text-black text-white border border-zinc-700 font-bold py-3 rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer"
                       >
                         <Calendar size={14} /> Add to Admin Calendar
-                      </button>
+                      </a>
+                      
                       <button 
                          onClick={() => deleteBooking(booking.id)}
                          className="w-full text-zinc-600 hover:text-red-400 text-[10px] uppercase font-bold tracking-widest flex items-center justify-center gap-1 py-2"
