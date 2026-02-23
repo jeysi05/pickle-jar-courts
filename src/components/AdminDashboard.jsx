@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
-import { Calendar, CheckCircle, XCircle, LogOut, Clock, Trash2, ShieldCheck, MapPin, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { Calendar, CheckCircle, XCircle, LogOut, Clock, Trash2, ShieldCheck, MapPin, ArrowLeft, AlertTriangle, Zap, TrendingUp, Wallet } from 'lucide-react';
 
 export default function AdminDashboard({ onLogout }) {
   const [bookings, setBookings] = useState([]);
@@ -32,18 +32,49 @@ export default function AdminDashboard({ onLogout }) {
     return () => unsubscribe();
   }, [isAuthenticated]);
 
-  // --- REPAIRED STATUS UPDATE ---
-  const handleStatusUpdate = async (id, newStatus) => {
+  // --- REVENUE CALCULATIONS ---
+  const totalPaid = bookings
+    .filter(b => b.status === 'booked')
+    .reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
+
+  const totalPending = bookings
+    .filter(b => b.status === 'booked_unpaid' || !b.status || b.status === 'PENDING')
+    .reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
+
+  // --- STATUS UPDATE & SMS TRIGGER ---
+  const handleStatusUpdate = async (id, newStatus, customerContact, customerName, bookingDetails) => {
     try {
+      // 1. Update Firebase
       const ref = doc(db, "bookings", id);
-      // We use updateDoc to only change the status field
-      await updateDoc(ref, { 
-        status: newStatus 
-      });
+      await updateDoc(ref, { status: newStatus });
       
-      console.log(`Successfully updated ${id} to ${newStatus}`);
+      // 2. Trigger SMS ONLY if status is set to 'booked' (PAID)
+      if (newStatus === 'booked') {
+        const API_KEY = "29a1827bca8ebef96d110e5920dea863";
+        const SENDER_NAME = "SEMAPHORE"; // Update to "PickleJar" once LOI is approved
+        
+        const smsMessage = `Hi ${customerName}, your booking at PickleJarCourts for ${bookingDetails} is now CONFIRMED. See you on the court!`;
+
+        const response = await fetch('https://api.semaphore.co/api/v4/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            'apikey': API_KEY,
+            'number': customerContact,
+            'message': smsMessage,
+            'sendername': SENDER_NAME
+          })
+        });
+
+        if (response.ok) {
+          alert(`✅ Approved! SMS confirmation sent to ${customerName}.`);
+        } else {
+          alert("✅ Status updated, but SMS failed. Check Semaphore credits.");
+        }
+      } else {
+        console.log(`Successfully updated ${id} to ${newStatus}`);
+      }
     } catch (error) {
-      // Check your browser console (F12) to see the real error here!
       console.error("FIREBASE ERROR:", error);
       alert(`Failed to update status: ${error.message}`);
     }
@@ -52,21 +83,6 @@ export default function AdminDashboard({ onLogout }) {
   const deleteBooking = async (id) => {
     if (confirm("Are you sure you want to PERMANENTLY delete this record?")) {
       await deleteDoc(doc(db, "bookings", id));
-    }
-  };
-
-  // --- GOOGLE CALENDAR LINK ---
-  const getGoogleCalendarUrl = (booking) => {
-    try {
-      const { court, date, timeSlot, customerName, duration } = booking;
-      const [year, month, day] = date.split('-');
-      let [hours, minutes] = timeSlot.split(':');
-      const startTime = new Date(year, month - 1, day, parseInt(hours), parseInt(minutes));
-      const endTime = new Date(startTime.getTime() + (duration || 1) * 60 * 60 * 1000);
-      const formatTime = (d) => d.toISOString().replace(/-|:|\.\d\d\d/g, "");
-      return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`🎾 ${customerName} - ${court}`)}&dates=${formatTime(startTime)}/${formatTime(endTime)}&location=${encodeURIComponent("PickleJarCourts")}`;
-    } catch (e) {
-      return "#";
     }
   };
 
@@ -91,14 +107,37 @@ export default function AdminDashboard({ onLogout }) {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white p-4 md:p-8">
-      {/* HEADER */}
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center mb-10 border-b border-zinc-800 pb-6 gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-white italic uppercase tracking-tighter">Admin <span className="text-lime-400 font-bold">Dashboard</span></h1>
+      
+      {/* HEADER & ANALYTICS */}
+      <div className="max-w-7xl mx-auto mb-10">
+        <div className="flex flex-col md:flex-row justify-between items-center border-b border-zinc-800 pb-8 gap-4 mb-8">
+          <div>
+            <h1 className="text-3xl font-black text-white italic uppercase tracking-tighter">Admin <span className="text-lime-400 font-bold">Dashboard</span></h1>
+            <p className="text-zinc-500 text-[10px] uppercase tracking-widest mt-1">PickleJarCourts Live Management</p>
+          </div>
+          <button onClick={onLogout} className="flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 px-6 py-3 rounded-2xl transition uppercase">
+            <LogOut size={14} /> Logout
+          </button>
         </div>
-        <button onClick={onLogout} className="flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 px-6 py-3 rounded-2xl transition uppercase">
-          <LogOut size={14} /> Logout
-        </button>
+
+        {/* REVENUE CARDS */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
+            <TrendingUp className="text-lime-400 mb-2" size={20} />
+            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Paid Revenue</p>
+            <p className="text-3xl font-black text-white">₱{totalPaid.toLocaleString()}</p>
+          </div>
+          <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
+            <Wallet className="text-orange-400 mb-2" size={20} />
+            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Pending (Pay Later)</p>
+            <p className="text-3xl font-black text-white">₱{totalPending.toLocaleString()}</p>
+          </div>
+          <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
+            <Zap className="text-blue-400 mb-2" size={20} />
+            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Total Bookings</p>
+            <p className="text-3xl font-black text-white">{bookings.length}</p>
+          </div>
+        </div>
       </div>
 
       {/* TABLE */}
@@ -136,14 +175,26 @@ export default function AdminDashboard({ onLogout }) {
                          <Calendar size={12} className="text-lime-400"/> {booking.date}
                     </div>
                     <div className="text-zinc-400 text-[10px] mt-1 flex items-center gap-2">
-                         <Clock size={12} /> {booking.timeSlot}
+                         <Clock size={12} /> {booking.timeSlot} | Court {booking.court}
                     </div>
                   </td>
                   <td className="p-6 font-mono text-lime-400 font-bold">₱{booking.price || 0}</td>
                   <td className="p-6">
                     <div className="flex gap-2 justify-end">
-                      <button onClick={() => handleStatusUpdate(booking.id, 'booked')} className="p-2 bg-green-500/10 hover:bg-green-500 text-green-500 hover:text-white rounded-lg transition border border-green-500/20"><CheckCircle size={16} /></button>
-                      <button onClick={() => handleStatusUpdate(booking.id, 'booked_unpaid')} className="p-2 bg-orange-500/10 hover:bg-orange-500 text-orange-500 hover:text-white rounded-lg transition border border-orange-500/20"><AlertTriangle size={16} /></button>
+                      <button 
+                        onClick={() => handleStatusUpdate(
+                          booking.id, 
+                          'booked', 
+                          booking.customerContact, 
+                          booking.customerName, 
+                          `Court ${booking.court} @ ${booking.timeSlot}`
+                        )} 
+                        title="Approve & Send SMS"
+                        className="p-2 bg-green-500/10 hover:bg-green-500 text-green-500 hover:text-white rounded-lg transition border border-green-500/20"
+                      >
+                        <CheckCircle size={16} />
+                      </button>
+                      <button onClick={() => handleStatusUpdate(booking.id, 'booked_unpaid')} className="p-2 bg-orange-500/10 hover:bg-orange-400 text-orange-400 hover:text-white rounded-lg transition border border-orange-500/20"><AlertTriangle size={16} /></button>
                       <button onClick={() => handleStatusUpdate(booking.id, 'cancelled')} className="p-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition border border-red-500/20"><XCircle size={16} /></button>
                       <button onClick={() => deleteBooking(booking.id)} className="p-2 bg-zinc-800 hover:bg-red-600 text-zinc-500 hover:text-white rounded-lg transition ml-2"><Trash2 size={16} /></button>
                     </div>
