@@ -306,36 +306,38 @@ function App() {
                             </div>
                             
                             {/* --- THE NEW BREAKDOWN TOOLTIP UI --- */}
-                            <div className="flex items-center gap-6">
-                                <div className="text-right relative group cursor-help">
-                                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest flex items-center justify-end gap-1">
-                                        {priceInfo.isDiscounted && !isCoachMode && (
-                                            <span className="bg-lime-500 text-black px-1.5 py-0.5 rounded-[4px] text-[8px] animate-pulse">
-                                                BEST RATE APPLIED
-                                            </span>
-                                        )}
-                                        Block Price
-                                        <span className="text-[8px] border border-zinc-600 rounded-full w-3 h-3 flex items-center justify-center opacity-50 ml-1 group-hover:opacity-100">?</span>
-                                    </p>
-                                    <p className={`text-3xl font-black ${isCoachMode ? 'text-yellow-400' : 'text-lime-400'}`}>
-                                        ₱{priceInfo.total}
-                                    </p>
+                            <div className="flex items-center justify-between w-full md:w-auto gap-4 mt-4 md:mt-0">
+                              <div className="text-left md:text-right relative group cursor-help">
+                                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest flex items-center justify-start md:justify-end gap-1">
+                                      {priceInfo.isDiscounted && !isCoachMode && (
+                                          <span className="bg-lime-500 text-black px-1.5 py-0.5 rounded-[4px] text-[8px] animate-pulse">
+                                              BEST RATE APPLIED
+                                          </span>
+                                      )}
+                                      Block Price
+                                      <span className="text-[8px] border border-zinc-600 rounded-full w-3 h-3 flex items-center justify-center opacity-50 ml-1 group-hover:opacity-100">?</span>
+                                  </p>
+                                  <p className={`text-3xl font-black ${isCoachMode ? 'text-yellow-400' : 'text-lime-400'}`}>
+                                      ₱{priceInfo.total}
+                                  </p>
 
-                                    {/* Tooltip Box */}
-                                    <div className="absolute bottom-full right-0 mb-2 w-64 bg-zinc-800 border border-zinc-700 rounded-xl p-4 shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
-                                        <p className="text-white text-xs font-black uppercase tracking-widest border-b border-white/10 pb-2 mb-2 text-left">Price Breakdown</p>
-                                        {priceInfo.breakdown.map((item, idx) => (
-                                            <div key={idx} className="flex justify-between items-center text-xs text-zinc-300 py-1">
-                                                <span className="text-left">{item.label}</span>
-                                                <span className="font-mono text-white">₱{item.price}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                <button onClick={addToCart} className="bg-white hover:bg-zinc-200 text-black px-8 py-4 rounded-xl font-black uppercase tracking-widest flex items-center gap-2 transition-transform hover:scale-105 shadow-xl shadow-white/10">
-                                    <PlusCircle size={18} /> Add to Cart
-                                </button>
-                            </div>
+                                  {/* FIXED Tooltip Box */}
+                                  {/* Changed from right-0 to: left-0 md:left-auto md:right-0 */}
+                                  <div className="absolute bottom-full left-0 md:left-auto md:right-0 mb-2 w-64 max-w-[90vw] bg-zinc-800 border border-zinc-700 rounded-xl p-4 shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                                      <p className="text-white text-xs font-black uppercase tracking-widest border-b border-white/10 pb-2 mb-2 text-left">Price Breakdown</p>
+                                      {priceInfo.breakdown.map((item, idx) => (
+                                          <div key={idx} className="flex justify-between items-center text-xs text-zinc-300 py-1 gap-2">
+                                              <span className="text-left whitespace-normal">{item.label}</span>
+                                              <span className="font-mono text-white shrink-0">₱{item.price}</span>
+                                          </div>
+                                      ))}
+                                  </div>
+                              </div>
+                              
+                              <button onClick={addToCart} className="bg-white hover:bg-zinc-200 text-black px-6 md:px-8 py-3 md:py-4 rounded-xl font-black uppercase tracking-widest flex items-center gap-2 transition-transform hover:scale-105 shadow-xl shadow-white/10 whitespace-nowrap">
+                                  <PlusCircle size={18} /> Add to Cart
+                              </button>
+                          </div>
                         </div>
                     )}
 
