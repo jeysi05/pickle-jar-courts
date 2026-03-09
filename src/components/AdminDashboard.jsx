@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
-import { Calendar, CheckCircle, XCircle, LogOut, Clock, Trash2, ShieldCheck, AlertTriangle, Zap, TrendingUp, Wallet, ShoppingCart, CalendarPlus } from 'lucide-react';
+import { Calendar, CheckCircle, XCircle, LogOut, Trash2, ShieldCheck, AlertTriangle, Zap, TrendingUp, Wallet, ShoppingCart, CalendarPlus } from 'lucide-react';
 
 export default function AdminDashboard({ onLogout }) {
   const [groupedBookings, setGroupedBookings] = useState({});
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // --- LOGIN ---
   const handleLogin = (e) => {
     e.preventDefault();
     if (password === 'admin123') { 
@@ -18,21 +17,14 @@ export default function AdminDashboard({ onLogout }) {
     }
   };
 
-  // --- LIVE DATA FEED & GROUPING ---
-useEffect(() => {
+  useEffect(() => {
     if (!isAuthenticated) return;
     const q = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const allDocs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      // NEW GROUPING LOGIC: Group by Customer Contact + Date
-      // This forces all courts booked by the same person on the same day into ONE row.
       const grouped = allDocs.reduce((acc, curr) => {
-        
         const groupId = (curr.customerContact && curr.date) 
           ? `${curr.customerContact}_${curr.date}` 
           : curr.orderGroupId || curr.id; 
@@ -60,7 +52,6 @@ useEffect(() => {
     return () => unsubscribe();
   }, [isAuthenticated]);
 
-  // --- REVENUE CALCULATIONS ---
   const allBookingsFlat = Object.values(groupedBookings).flatMap(group => group.items);
   
   const totalPaid = allBookingsFlat
@@ -71,33 +62,13 @@ useEffect(() => {
     .filter(b => b.status === 'booked_unpaid' || !b.status || b.status === 'PENDING' || b.status === 'PAY_LATER')
     .reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
 
-  // --- GOOGLE CALENDAR LINK GENERATOR ---
-const getGoogleCalendarLink = (group) => {
+  // REVISION #3: Individual Google Calendar Link per Court
+  const getGoogleCalendarLinkForItem = (item, group) => {
     try {
-      if (!group.items || group.items.length === 0) return "#";
-      
-      let earliestStart = 24;
-      let latestEnd = 0;
-      
-      // 1. Find the overall start/end times and build a list for the description
-      const bookingLines = group.items.map(item => {
-        const start = parseFloat(item.timeSlot); // Safely parses string like "14.5:00" to 14.5
-        const duration = parseFloat(item.duration);
-        const end = start + duration;
-        
-        if (start < earliestStart) earliestStart = start;
-        if (end > latestEnd) latestEnd = end;
-        
-        // Format time for human-readable description
-        const hour = Math.floor(start);
-        const mins = start % 1 === 0 ? "00" : "30";
-        const ampm = hour >= 12 && hour < 24 ? "PM" : "AM";
-        const displayHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
-        
-        return `• Court ${item.court} @ ${displayHour}:${mins} ${ampm} (${duration}h)`;
-      }).join('\n');
+      const start = parseFloat(item.timeSlot);
+      const duration = parseFloat(item.duration);
+      const end = start + duration;
 
-      // 2. Format strictly to YYYYMMDDTHHMMSS for Google API
       const formatGCalDate = (dateStr, timeNum) => {
         const [year, month, day] = dateStr.split('-');
         const hours = Math.floor(timeNum).toString().padStart(2, '0');
@@ -105,14 +76,14 @@ const getGoogleCalendarLink = (group) => {
         return `${year}${month}${day}T${hours}${minutes}00`;
       };
 
-      const startTimeGcal = formatGCalDate(group.date, earliestStart);
-      const endTimeGcal = formatGCalDate(group.date, latestEnd);
+      const startTimeGcal = formatGCalDate(group.date, start);
+      const endTimeGcal = formatGCalDate(group.date, end);
 
-      // 3. Encode everything for the URL
-      const title = encodeURIComponent(`PickleJar: ${group.customerName}`);
-      const details = encodeURIComponent(
-        `Customer: ${group.customerName}\nContact: ${group.customerContact}\n\nBooked Slots:\n${bookingLines}\n\nTotal Due: ₱${group.totalPrice}`
-      );
+      const isPaid = (group.overallStatus === 'PAY_LATER' || item.status === 'booked_unpaid' || item.status === 'PAY_LATER') ? 'UNPAID' : 'PAID';
+      
+      // Formatting Title: [Court #] [Name] [PAID/UNPAID]
+      const title = encodeURIComponent(`C${item.court} ${group.customerName} ${isPaid}`);
+      const details = encodeURIComponent(`Customer: ${group.customerName}\nContact: ${group.customerContact}\nTotal Price: ₱${item.price}\nReference: ${item.referenceNo || 'N/A'}`);
       const location = encodeURIComponent("PDR Business Hub, Cabuyao");
 
       return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startTimeGcal}/${endTimeGcal}&details=${details}&location=${location}`;
@@ -122,51 +93,68 @@ const getGoogleCalendarLink = (group) => {
     }
   };
 
-  // --- GROUP STATUS UPDATE & SMS TRIGGER ---
-  const handleGroupStatusUpdate = async (group, newStatus) => {
+  // REVISION #4 & #5: Consolidated "Confirm Order" action that triggers SMS
+  const handleConfirmOrder = async (group) => {
     try {
-      // 1. Update Firebase for ALL items in this group
+      // 1. Update Firebase for ALL items
       await Promise.all(group.items.map(item => {
         const ref = doc(db, "bookings", item.id);
+        const newStatus = (item.status === 'PAY_LATER' || item.status === 'booked_unpaid') ? 'booked_unpaid' : 'booked';
         return updateDoc(ref, { status: newStatus });
       }));
       
-      // 2. Trigger SMS if status is 'booked' (PAID) OR 'booked_unpaid' (PAY LATER)
-      if (newStatus === 'booked' || newStatus === 'booked_unpaid') {
-        const API_KEY = "29a1827bca8ebef96d110e5920dea863";
-        const SENDER_NAME = "SEMAPHORE"; // Update to "PickleJar" once LOI is approved
-        
-        // Create a summary string of the courts booked
-        const courtSummary = group.items.map(i => `C${i.court}`).join(', ');
-        
-        // Dynamically change the text message based on the status
-        let statusText = newStatus === 'booked' ? "CONFIRMED" : "APPROVED (Pay Later)";
-        let extraNote = newStatus === 'booked' ? "See you on the court!" : "Please settle your payment at the venue. See you!";
+      // 2. Format Exact SMS Requested by Sir Pat
+      const API_KEY = "29a1827bca8ebef96d110e5920dea863";
+      const SENDER_NAME = "SEMAPHORE"; 
+      
+      const courtSummary = group.items.map(i => `${i.court}`).join(', ');
+      
+      // Format Date to DD-Mmm-YY
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const d = new Date(group.date);
+      const formattedDate = `${String(d.getDate()).padStart(2, '0')}-${months[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`;
 
-        const smsMessage = `Hi ${group.customerName}, your booking at PickleJarCourts for ${courtSummary} on ${group.date} is now ${statusText}. ${extraNote}`;
+      // Format Time beautifully
+      const timeSummary = group.items.map(i => {
+          const startHour = Math.floor(parseFloat(i.timeSlot));
+          const startMins = parseFloat(i.timeSlot) % 1 === 0 ? "00" : "30";
+          const startAmPm = startHour >= 12 && startHour < 24 ? "PM" : "AM";
+          const dispStart = startHour > 12 ? startHour - 12 : (startHour === 0 ? 12 : startHour);
+          return `${dispStart}:${startMins} ${startAmPm}`;
+      }).join(', ');
 
-        const response = await fetch('https://api.semaphore.co/api/v4/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            'apikey': API_KEY,
-            'number': group.customerContact,
-            'message': smsMessage,
-            'sendername': SENDER_NAME
-          })
-        });
+      // REVISION #6: Exact SMS Template
+      const smsMessage = `Hello, this is to confirm your reservation at Pickle Jar Courts!\n\nYour reservation details:\nName: ${group.customerName}\nCourt No.: ${courtSummary}\nDate and Time: ${formattedDate} @ ${timeSummary}\n\nThank you and see you on the court!`;
 
-        if (response.ok) {
-          alert(`✅ Order Updated! SMS sent to ${group.customerName}.`);
-        } else {
-          alert("✅ Order updated, but SMS failed. Check Semaphore credits.");
-        }
+      const response = await fetch('https://api.semaphore.co/api/v4/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          'apikey': API_KEY,
+          'number': group.customerContact,
+          'message': smsMessage,
+          // 'sendername': SENDER_NAME
+        })
+      });
+
+      if (response.ok) {
+        alert(`✅ Order Confirmed! SMS sent to ${group.customerName}.`);
       } else {
-        console.log(`Successfully updated order ${group.orderId} to ${newStatus}`);
+        alert("✅ Order confirmed, but SMS failed. Check Semaphore credits.");
       }
     } catch (error) {
       console.error("FIREBASE ERROR:", error);
-      alert(`Failed to update order status: ${error.message}`);
+      alert(`Failed to confirm order: ${error.message}`);
+    }
+  };
+
+  const handleCancelOrder = async (group) => {
+    if (confirm("Are you sure you want to CANCEL this order?")) {
+        try {
+            await Promise.all(group.items.map(item => updateDoc(doc(db, "bookings", item.id), { status: 'cancelled' })));
+        } catch (error) {
+            alert(`Failed to cancel order: ${error.message}`);
+        }
     }
   };
 
@@ -195,7 +183,6 @@ const getGoogleCalendarLink = (group) => {
     );
   }
 
-  // Convert grouped object to array for mapping
   const groupArray = Object.values(groupedBookings);
 
   return (
@@ -248,8 +235,6 @@ const getGoogleCalendarLink = (group) => {
             </thead>
             <tbody className="divide-y divide-white/5">
               {groupArray.map((group) => {
-                
-                // For display, use the status of the first item in the group
                 const displayStatus = group.items[0]?.status || 'PENDING';
                 
                 return (
@@ -271,53 +256,71 @@ const getGoogleCalendarLink = (group) => {
                   </td>
                   <td className="p-6">
                     <div className="space-y-2">
-                        <div className="text-zinc-300 text-xs font-bold flex items-center gap-2 mb-1">
+                        <div className="text-zinc-300 text-xs font-bold flex items-center gap-2 mb-2">
                             <Calendar size={12} className="text-lime-400"/> {group.date}
                         </div>
                         {group.items.map(item => (
-                            <div key={item.id} className="text-zinc-400 text-[11px] flex flex-col sm:flex-row items-start sm:items-center gap-2 bg-zinc-950 p-2 rounded-lg border border-white/5 inline-flex mr-2 mb-2">
-                                <div className="flex items-center gap-1">
-                                    <ShoppingCart size={10} /> C{item.court} @ {item.timeSlot} ({item.duration}h)
+                            <div key={item.id} className="text-zinc-400 text-[11px] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-zinc-950 p-2.5 rounded-lg border border-white/5 mb-2 max-w-sm">
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-1">
+                                      <ShoppingCart size={10} /> C{item.court} @ {item.timeSlot} ({item.duration}h)
+                                  </div>
+                                  {item.referenceNo && item.referenceNo !== "N/A" && (
+                                      <span className="text-[9px] font-mono text-zinc-500">Ref: {item.referenceNo}</span>
+                                  )}
                                 </div>
-                                {/* INDIVIDUAL ITEM STATUS TAG */}
-                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border ${
-                                    item.status === 'booked' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 
-                                    (item.status === 'booked_unpaid' || item.status === 'PAY_LATER') ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
-                                    item.status === 'cancelled' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 
-                                    'bg-zinc-700/30 text-zinc-400 border-zinc-600'
-                                }`}>
-                                    {item.status === 'booked' ? 'PAID' : (item.status === 'booked_unpaid' || item.status === 'PAY_LATER') ? 'PAY LATER' : item.status}
-                                </span>
+                                
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border ${
+                                      item.status === 'booked' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 
+                                      (item.status === 'booked_unpaid' || item.status === 'PAY_LATER') ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                                      item.status === 'cancelled' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 
+                                      'bg-zinc-700/30 text-zinc-400 border-zinc-600'
+                                  }`}>
+                                      {item.status === 'booked' ? 'PAID' : (item.status === 'booked_unpaid' || item.status === 'PAY_LATER') ? 'PAY LATER' : item.status}
+                                  </span>
+
+                                  {/* REVISION #3: Individual Calendar Add Button */}
+                                  <a 
+                                    href={getGoogleCalendarLinkForItem(item, group)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    title="Add to Google Calendar"
+                                    className="p-1 bg-blue-500/10 hover:bg-blue-500 text-blue-400 hover:text-white rounded transition border border-blue-500/20"
+                                  >
+                                    <CalendarPlus size={12} />
+                                  </a>
+                                </div>
                             </div>
                         ))}
                     </div>
                   </td>
                   <td className="p-6 align-top font-mono text-lime-400 font-bold text-lg">₱{group.totalPrice}</td>
+                  
+                  {/* REVISION #4: Streamlined Order Actions */}
                   <td className="p-6 align-top">
                     <div className="flex gap-2 justify-end">
-                      
-                      {/* --- NEW CALENDAR BUTTON --- */}
-                      <a 
-                        href={getGoogleCalendarLink(group)}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Add to Google Calendar"
-                        className="p-2 bg-blue-500/10 hover:bg-blue-500 text-blue-400 hover:text-white rounded-lg transition border border-blue-500/20 inline-flex items-center justify-center"
-                      >
-                        <CalendarPlus size={16} />
-                      </a>
-                      {/* --------------------------- */}
-
                       <button 
-                        onClick={() => handleGroupStatusUpdate(group, 'booked')} 
-                        title="Approve Order & Send SMS"
+                        onClick={() => handleConfirmOrder(group)} 
+                        title="Confirm Order & Send SMS"
                         className="p-2 bg-green-500/10 hover:bg-green-500 text-green-500 hover:text-white rounded-lg transition border border-green-500/20"
                       >
                         <CheckCircle size={16} />
                       </button>
-                      <button onClick={() => handleGroupStatusUpdate(group, 'booked_unpaid')} title="Mark Pay Later" className="p-2 bg-orange-500/10 hover:bg-orange-400 text-orange-400 hover:text-white rounded-lg transition border border-orange-500/20"><AlertTriangle size={16} /></button>
-                      <button onClick={() => handleGroupStatusUpdate(group, 'cancelled')} title="Cancel Order" className="p-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition border border-red-500/20"><XCircle size={16} /></button>
-                      <button onClick={() => deleteGroup(group)} title="Delete Data" className="p-2 bg-zinc-800 hover:bg-red-600 text-zinc-500 hover:text-white rounded-lg transition ml-2"><Trash2 size={16} /></button>
+                      <button 
+                        onClick={() => handleCancelOrder(group)} 
+                        title="Cancel Order" 
+                        className="p-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition border border-red-500/20"
+                      >
+                        <XCircle size={16} />
+                      </button>
+                      <button 
+                        onClick={() => deleteGroup(group)} 
+                        title="Delete Data" 
+                        className="p-2 bg-zinc-800 hover:bg-red-600 text-zinc-500 hover:text-white rounded-lg transition ml-2"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                   </td>
                 </tr>

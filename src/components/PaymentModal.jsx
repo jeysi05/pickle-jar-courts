@@ -10,17 +10,14 @@ const SERVICE_ID = "service_2kiok8v";
 const TEMPLATE_ID = "template_qelnx59";
 const PUBLIC_KEY = "V6CJEroyQL2AHs8CS";
 
-// --- SEMAPHORE SMS KEY ---
-const SEMAPHORE_API_KEY = "29a1827bca8ebef96d110e5920dea863"; 
-
 export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
 
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
+  const [referenceNo, setReferenceNo] = useState(''); // REVISION #2: Added Reference Number state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Lock Scroll
   useEffect(() => {
     document.body.style.overflow = isOpen ? 'hidden' : 'unset';
     return () => { document.body.style.overflow = 'unset'; };
@@ -52,7 +49,7 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
     try {
       const initialStatus = paymentType === "PAY_LATER" ? "PAY_LATER" : "PENDING";
 
-      // 1. Save EACH cart item as a separate booking in Firebase
+      // 1. Save EACH cart item to Firebase (Now includes Reference No)
       await Promise.all(
         cart.map(item =>
           addDoc(collection(db, "bookings"), {
@@ -63,6 +60,7 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
             price: item.price,
             customerName: name,
             customerContact: contact,
+            referenceNo: paymentType === "PAY_LATER" ? "N/A" : referenceNo, // Saved for Admin Dashboard
             paymentProof: paymentType === "PAY_LATER" ? "Pay Later Requested" : "Pending Verification",
             status: initialStatus, 
             createdAt: new Date(),
@@ -89,28 +87,7 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
         PUBLIC_KEY
       );
 
-      // --- 4. Send SMS to Customer via Semaphore ---
-      const smsMessage = paymentType === "PAY_LATER" 
-        ? `Hi ${name}, your Pay Later request at Pickle Jar Courts is pending approval. Total: P${totalPrice}. We will update you soon!`
-        : `Hi ${name}, your booking at Pickle Jar Courts is received and pending verification. Total: P${totalPrice}. Thank you!`;
-
-      const smsData = new URLSearchParams();
-      smsData.append('apikey', SEMAPHORE_API_KEY);
-      smsData.append('number', contact);
-      smsData.append('message', smsMessage);
-
-      try {
-        await fetch('https://api.semaphore.co/api/v4/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          },
-          body: smsData.toString()
-        });
-      } catch (smsError) {
-        console.error("SMS Delivery Failed:", smsError);
-      }
-      // --------------------------------------------------
+      // (REVISION #5: SMS Logic removed from here to prevent fake bookings. Moved to AdminDashboard.)
 
       const successMsg = paymentType === "PAY_LATER" 
         ? "Success! Your Pay Later request has been sent for approval." 
@@ -119,6 +96,7 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
       alert(successMsg);
       setName('');
       setContact('');
+      setReferenceNo('');
       onClose();
       window.location.reload(); 
 
@@ -201,7 +179,6 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
               placeholder="Full Name (for booking ref)"
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-lime-500 outline-none transition"
             />
-
             <input
               required
               value={contact}
@@ -209,9 +186,16 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
               placeholder="Mobile Number (e.g., 09171234567)"
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-lime-500 outline-none transition"
             />
+            {/* REVISION #2: Transaction Reference Field */}
+            <input
+              value={referenceNo}
+              onChange={e => setReferenceNo(e.target.value)}
+              placeholder="GCash Reference No. (If paid)"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-lime-500 outline-none transition"
+            />
           </div>
 
-          {/* DISCLAIMER TEXT */}
+          {/* REVISION #7: UPDATED DISCLAIMER TEXT */}
           <div className="bg-zinc-950/50 border border-yellow-500/20 rounded-xl p-4 text-[10px] text-zinc-400 leading-relaxed max-h-32 overflow-y-auto custom-scrollbar">
             <div className="flex items-center gap-2 mb-2 text-yellow-500 font-bold uppercase tracking-widest">
                 <AlertTriangle size={12} /> Booking & Payment Disclaimer
@@ -221,9 +205,9 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
                 <li>Payments are non-refundable except in cases where Pickle Jar Courts is liable or requests for cancellations.</li>
                 <li>Any changes to your booking must be requested at least 24 hours prior to the scheduled booking time.</li>
                 <li>"Pay later" bookings are subject to approval and does not guarantee your reservation.</li>
-                <li>Cancellations are not permitted. However, bookings may be rescheduled, subject to availability, provided the request is made at least 24 hours in advance.</li>
+                <li>Cancellations are not permitted. However, bookings may be rescheduled (subject to availability), provided the request is made at least 24 hours in advance. Failure to notify us within the required time frame will result in forfeiture of the reservation and payment.</li>
             </ul>
-            <p>Failure to notify us within the required time frame will result in forfeiture of the reservation and payment.</p>
+            <p className="font-bold text-white mt-2">We will send you a confirmation SMS to your registered phone number once we approve your order.</p>
           </div>
 
           {/* SUBMIT BUTTONS */}

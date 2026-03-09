@@ -31,7 +31,8 @@ const calculatePriceDetails = (startTime, duration, dateString, isCoach) => {
       else if (isWeekend && t >= 8 && t < 12) { currentRate = 250; type = "Coach Off-Peak"; }
       else { type = "Coach Standard"; }
     } else {
-      if (isMonThurs && t >= 10 && t < 22) {
+      // REVISION #1: Must be Mon-Thurs, 10am-10pm, AND Minimum 2 Hours
+      if (isMonThurs && t >= 10 && t < 22 && duration >= 2) {
         currentRate = 250;
         type = "Mon - Thurs(10am-10pm) Promo";
       }
@@ -59,7 +60,6 @@ const calculatePriceDetails = (startTime, duration, dateString, isCoach) => {
         }
       }
       
-      // If the bundle combination is cheaper (or equal) to standard segments, select it
       if (priceWithThisBundle <= bestPrice) { 
         bestPrice = priceWithThisBundle;
         bestBundleStartIndex = i;
@@ -67,7 +67,6 @@ const calculatePriceDetails = (startTime, duration, dateString, isCoach) => {
       }
     }
 
-    // Build breakdown for the bundle scenario
     if (hasBundle) {
         bestBreakdown.push({ label: "3-Hour Bundle", price: 1000 });
         let remainingPromo = 0;
@@ -79,7 +78,7 @@ const calculatePriceDetails = (startTime, duration, dateString, isCoach) => {
                 else remainingStd += 0.5;
             }
         }
-        if (remainingPromo > 0) bestBreakdown.push({ label: `${remainingPromo}h @ Mon - Thurs(10am-10pm) Promo (₱250/hr)`, price: remainingPromo * 250 });
+        if (remainingPromo > 0) bestBreakdown.push({ label: `${remainingPromo}h @ Mon-Thurs Promo (₱250/hr)`, price: remainingPromo * 250 });
         if (remainingStd > 0) bestBreakdown.push({ label: `${remainingStd}h @ Standard (₱380/hr)`, price: remainingStd * 380 });
     }
   }
@@ -90,7 +89,7 @@ const calculatePriceDetails = (startTime, duration, dateString, isCoach) => {
       segments.forEach(seg => counts[seg.type] += 0.5);
 
       if (counts["Standard Rate"] > 0) bestBreakdown.push({ label: `${counts["Standard Rate"]}h @ Standard (₱380/hr)`, price: counts["Standard Rate"] * 380 });
-      if (counts["Mon - Thurs(10am-10pm) Promo"] > 0) bestBreakdown.push({ label: `${counts["Mon - Thurs(10am-10pm) Promo"]}h @ Mon - Thurs(10am-10pm) Promo (₱250/hr)`, price: counts["Mon - Thurs(10am-10pm) Promo"] * 250 });
+      if (counts["Mon - Thurs(10am-10pm) Promo"] > 0) bestBreakdown.push({ label: `${counts["Mon - Thurs(10am-10pm) Promo"]}h @ Mon-Thurs Promo (₱250/hr)`, price: counts["Mon - Thurs(10am-10pm) Promo"] * 250 });
       if (counts["Coach Standard"] > 0) bestBreakdown.push({ label: `${counts["Coach Standard"]}h @ Coach Standard (₱380/hr)`, price: counts["Coach Standard"] * 380 });
       if (counts["Coach Off-Peak"] > 0) bestBreakdown.push({ label: `${counts["Coach Off-Peak"]}h @ Coach Promo (₱250/hr)`, price: counts["Coach Off-Peak"] * 250 });
   }
@@ -148,7 +147,6 @@ function App() {
       return;
     }
     
-    // Updated to use the new calculatePriceDetails().total
     const newBooking = {
       id: Date.now(), 
       court: currentSelection.court,
@@ -181,7 +179,6 @@ function App() {
 
   const courts = [1, 2, 3, 4, 5];
 
-  // We generate the price details for the current selection here so the UI can use it
   let priceInfo = null;
   if (currentSelection) {
     priceInfo = calculatePriceDetails(currentSelection.time, duration, currentSelection.date, isCoachMode);
@@ -305,7 +302,7 @@ function App() {
                                 </div>
                             </div>
                             
-                            {/* --- THE NEW BREAKDOWN TOOLTIP UI --- */}
+                            {/* --- THE FIXED BREAKDOWN TOOLTIP UI --- */}
                             <div className="flex items-center justify-between w-full md:w-auto gap-4 mt-4 md:mt-0">
                               <div className="text-left md:text-right relative group cursor-help">
                                   <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest flex items-center justify-start md:justify-end gap-1">
@@ -321,8 +318,6 @@ function App() {
                                       ₱{priceInfo.total}
                                   </p>
 
-                                  {/* FIXED Tooltip Box */}
-                                  {/* Changed from right-0 to: left-0 md:left-auto md:right-0 */}
                                   <div className="absolute bottom-full left-0 md:left-auto md:right-0 mb-2 w-64 max-w-[90vw] bg-zinc-800 border border-zinc-700 rounded-xl p-4 shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
                                       <p className="text-white text-xs font-black uppercase tracking-widest border-b border-white/10 pb-2 mb-2 text-left">Price Breakdown</p>
                                       {priceInfo.breakdown.map((item, idx) => (
