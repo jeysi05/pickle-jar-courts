@@ -6,7 +6,6 @@ import AdminDashboard from './components/AdminDashboard';
 import PaymentModal from './components/PaymentModal'; 
 import { MapPin, ShieldCheck, Lock, ShoppingCart, X, PlusCircle, Zap } from 'lucide-react';
 
-// --- ADVANCED PRICING & BREAKDOWN ENGINE ---
 const calculatePriceDetails = (startTime, duration, dateString, isCoach) => {
   let date = new Date();
   if (dateString) {
@@ -21,7 +20,6 @@ const calculatePriceDetails = (startTime, duration, dateString, isCoach) => {
   let segments = [];
   let totalCalculatedPrice = 0;
 
-  // 1. Classify each 30-min segment
   for (let t = startTime; t < startTime + duration; t += 0.5) {
     let currentRate = 380; 
     let type = "Standard Rate";
@@ -31,7 +29,6 @@ const calculatePriceDetails = (startTime, duration, dateString, isCoach) => {
       else if (isWeekend && t >= 8 && t < 12) { currentRate = 250; type = "Coach Off-Peak"; }
       else { type = "Coach Standard"; }
     } else {
-      // REVISION #1: Must be Mon-Thurs, 10am-10pm, AND Minimum 2 Hours
       if (isMonThurs && t >= 10 && t < 22 && duration >= 2) {
         currentRate = 250;
         type = "Mon - Thurs(10am-10pm) Promo";
@@ -47,9 +44,8 @@ const calculatePriceDetails = (startTime, duration, dateString, isCoach) => {
   let bestBreakdown = [];
   let hasBundle = false;
 
-  // 2. Sliding Window for 3-Hour Bundle
   if (!isCoach && duration >= 3) {
-    const bundleSize = 6; // 3 hours = 6 half-hour segments
+    const bundleSize = 6; 
     let bestBundleStartIndex = -1;
 
     for (let i = 0; i <= segments.length - bundleSize; i++) {
@@ -83,7 +79,6 @@ const calculatePriceDetails = (startTime, duration, dateString, isCoach) => {
     }
   }
 
-  // 3. Fallback Breakdown (If no bundle is applied)
   if (!hasBundle) {
       let counts = { "Standard Rate": 0, "Mon - Thurs(10am-10pm) Promo": 0, "Coach Standard": 0, "Coach Off-Peak": 0 };
       segments.forEach(seg => counts[seg.type] += 0.5);
@@ -180,8 +175,31 @@ function App() {
   const courts = [1, 2, 3, 4, 5];
 
   let priceInfo = null;
+  let availableDurations = [];
+
   if (currentSelection) {
     priceInfo = calculatePriceDetails(currentSelection.time, duration, currentSelection.date, isCoachMode);
+
+    const activeBookings = [...liveBookings.filter(b => b.status !== 'cancelled'), ...cart].filter(
+      b => b.court === currentSelection.court && b.date === currentSelection.date
+    );
+    
+    // BUG FIX: Parse the time safely whether it's an int from Cart or string from Firebase
+    const getStartTime = (b) => b.time !== undefined ? b.time : parseFloat(b.timeSlot);
+
+    const futureBookings = activeBookings.filter(b => getStartTime(b) > currentSelection.time);
+    
+    let nextBookingTime = 24; 
+    if (futureBookings.length > 0) {
+      nextBookingTime = Math.min(...futureBookings.map(b => getStartTime(b)));
+    }
+    
+    const maxPossible = nextBookingTime - currentSelection.time;
+    const absoluteMax = Math.min(5, maxPossible);
+    
+    for (let i = 1; i <= absoluteMax; i += 0.5) {
+      availableDurations.push(i);
+    }
   }
 
   return (
@@ -263,7 +281,6 @@ function App() {
         </div>
       </div>
 
-      {/* FOOTER / CART */}
       {(currentSelection || cart.length > 0) && (
         <div className="fixed bottom-0 left-0 w-full z-50">
              <div className="bg-zinc-900/95 backdrop-blur-xl p-4 md:p-6 shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.8)] border-t border-white/10">
@@ -282,27 +299,25 @@ function App() {
                                     <div className="flex flex-wrap items-center gap-4 mt-2">
                                         <div className="flex items-center gap-2">
                                             <p className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Duration:</p>
+                                            
                                             <select 
                                                 value={duration} 
                                                 onChange={(e) => setDuration(parseFloat(e.target.value))}
                                                 className="bg-zinc-800 text-white border border-zinc-700 rounded-md py-0.5 px-2 text-xs font-bold outline-none"
                                             >
-                                                <option value={1}>1 Hour</option>
-                                                <option value={1.5}>1.5 Hours</option>
-                                                <option value={2}>2 Hours</option>
-                                                <option value={2.5}>2.5 Hours</option>
-                                                <option value={3}>3 Hours</option>
-                                                <option value={3.5}>3.5 Hours</option>
-                                                <option value={4}>4 Hours</option>
-                                                <option value={4.5}>4.5 Hours</option>
-                                                <option value={5}>5 Hours</option>
+                                                {availableDurations.length > 0 ? (
+                                                  availableDurations.map(d => (
+                                                    <option key={d} value={d}>{d} Hour{d > 1 ? 's' : ''}</option>
+                                                  ))
+                                                ) : (
+                                                  <option value={0} disabled>Not enough time</option>
+                                                )}
                                             </select>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             
-                            {/* --- THE FIXED BREAKDOWN TOOLTIP UI --- */}
                             <div className="flex items-center justify-between w-full md:w-auto gap-4 mt-4 md:mt-0">
                               <div className="text-left md:text-right relative group cursor-help">
                                   <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest flex items-center justify-start md:justify-end gap-1">
@@ -329,7 +344,7 @@ function App() {
                                   </div>
                               </div>
                               
-                              <button onClick={addToCart} className="bg-white hover:bg-zinc-200 text-black px-6 md:px-8 py-3 md:py-4 rounded-xl font-black uppercase tracking-widest flex items-center gap-2 transition-transform hover:scale-105 shadow-xl shadow-white/10 whitespace-nowrap">
+                              <button onClick={addToCart} disabled={availableDurations.length === 0} className="bg-white hover:bg-zinc-200 text-black px-6 md:px-8 py-3 md:py-4 rounded-xl font-black uppercase tracking-widest flex items-center gap-2 transition-transform hover:scale-105 shadow-xl shadow-white/10 whitespace-nowrap disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed">
                                   <PlusCircle size={18} /> Add to Cart
                               </button>
                           </div>

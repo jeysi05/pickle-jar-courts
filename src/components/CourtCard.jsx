@@ -2,7 +2,6 @@ import { useState } from 'react';
 
 export default function CourtCard({ courtName, image, cart, currentSelection, currentDuration, startTimeOffset = 0, onSlotSelect, courtId, isCoachMode, existingBookings = [] }) {
   
-  // Helper to strictly get TODAY in local YYYY-MM-DD format
   const getLocalTodayString = () => {
     const t = new Date();
     return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
@@ -26,18 +25,13 @@ export default function CourtCard({ courtName, image, cart, currentSelection, cu
 
   const isSlotPast = (timeVal) => {
     const today = new Date();
-    
-    // Safely parse the local string so it doesn't jump to UTC
     const [year, month, day] = selectedDate.split('-');
     const selected = new Date(year, month - 1, day);
-
-    // Strip the time to compare calendar dates only
     const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     
-    if (selected > todayDateOnly) return false; // Future date -> open
-    if (selected < todayDateOnly) return true;  // Past date -> locked
+    if (selected > todayDateOnly) return false; 
+    if (selected < todayDateOnly) return true;  
     
-    // If it is exactly today, check the current hour
     const currentHour = today.getHours();
     const currentTimeVal = currentHour + (today.getMinutes() / 60);
     return timeVal <= currentTimeVal;
@@ -69,29 +63,39 @@ export default function CourtCard({ courtName, image, cart, currentSelection, cu
                 {generateTimeSlots().map((time) => {
                     const isPast = isSlotPast(time);
                     
-                    // CHECK 1: Is it in the local checkout cart?
-                    const isInLocalCart = cart.find(item => 
+                    // 1. Check local cart
+                    const cartItem = cart.find(item => 
                         item.court === courtId && 
                         item.date === selectedDate &&
-                        ((time >= item.time && time < (item.time + item.duration)) ||
-                         (item.time >= time && item.time < (time + 1)))
+                        time >= item.time && time < (item.time + item.duration)
                     );
 
-                    // CHECK 2: Is it officially approved ('booked') in the database?
-                    const isBookedInDB = existingBookings.find(item => {
-                        if (item.court !== courtId || item.date !== selectedDate || item.status !== 'booked') return false;
+                    // 2. Check DB
+                    const dbItem = existingBookings.find(item => {
+                        if (item.court !== courtId || item.date !== selectedDate || item.status === 'cancelled') return false;
                         const itemStart = parseFloat(item.timeSlot);
                         const itemEnd = itemStart + parseFloat(item.duration);
                         return time >= itemStart && time < itemEnd;
                     });
 
-                    const isOccupied = isInLocalCart || isBookedInDB;
+                    const occupyingItem = cartItem || dbItem;
+                    let isOccupiedStart = false;
+                    let isOccupiedTrail = false;
 
+                    // BUG FIX: Only flag the exact start time as "Occupied" (green), make the rest dimmed.
+                    if (occupyingItem) {
+                        const itemStart = occupyingItem.time !== undefined ? occupyingItem.time : parseFloat(occupyingItem.timeSlot);
+                        if (time === itemStart) {
+                            isOccupiedStart = true;
+                        } else {
+                            isOccupiedTrail = true;
+                        }
+                    }
+
+                    // Strict preview highlight for ONLY the clicked start time
                     let isPreview = false;
                     if (currentSelection?.court === courtId && currentSelection?.date === selectedDate) {
-                        const previewStart = currentSelection.time + startTimeOffset;
-                        const previewEnd = previewStart + currentDuration;
-                        if (time >= Math.floor(previewStart) && time < Math.ceil(previewEnd)) {
+                        if (time === currentSelection.time) {
                             isPreview = true;
                         }
                     }
@@ -100,10 +104,13 @@ export default function CourtCard({ courtName, image, cart, currentSelection, cu
                     
                     if (isPast) {
                         btnClass = 'bg-zinc-950 text-zinc-700 border-transparent cursor-not-allowed opacity-50';
-                    } else if (isOccupied) {
+                    } else if (isOccupiedStart) {
                         btnClass = isCoachMode 
-                            ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-600/50 cursor-not-allowed'
-                            : 'bg-lime-500/10 border-lime-500/30 text-lime-600/50 cursor-not-allowed';
+                            ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500 cursor-not-allowed'
+                            : 'bg-lime-500/10 border-lime-500/30 text-lime-400 cursor-not-allowed';
+                    } else if (isOccupiedTrail) {
+                        // Dimmed out slots for the remainder of a long booking
+                        btnClass = 'bg-zinc-900/50 text-zinc-600 border-transparent cursor-not-allowed opacity-40';
                     } else if (isPreview) {
                         btnClass = 'bg-white text-black border-white animate-pulse shadow-[0_0_15px_rgba(255,255,255,0.4)] scale-105 z-10'; 
                     }
@@ -111,12 +118,12 @@ export default function CourtCard({ courtName, image, cart, currentSelection, cu
                     return (
                         <button
                             key={time}
-                            disabled={isPast || isOccupied} 
+                            disabled={isPast || isOccupiedStart || isOccupiedTrail} 
                             onClick={() => onSlotSelect(courtId, time, selectedDate)}
                             className={`relative py-3 rounded-xl text-[10px] font-black transition-all border flex flex-col items-center justify-center ${btnClass}`}
                         >
                             <span>{formatTime(time)}</span>
-                            {isOccupied && <span className="text-[7px] uppercase mt-0.5">Occupied</span>}
+                            {isOccupiedStart && <span className="text-[7px] uppercase mt-0.5">Occupied</span>}
                         </button>
                     );
                 })}
@@ -124,4 +131,4 @@ export default function CourtCard({ courtName, image, cart, currentSelection, cu
         </div>
     </div>
   );
-}
+} 

@@ -5,7 +5,6 @@ import { collection, addDoc } from 'firebase/firestore';
 import { X, Copy, Check, ShoppingCart, AlertTriangle } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 
-// --- EMAILJS KEYS ---
 const SERVICE_ID = "service_2kiok8v";
 const TEMPLATE_ID = "template_qelnx59";
 const PUBLIC_KEY = "V6CJEroyQL2AHs8CS";
@@ -14,7 +13,7 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
 
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
-  const [referenceNo, setReferenceNo] = useState(''); // REVISION #2: Added Reference Number state
+  const [referenceNo, setReferenceNo] = useState(''); 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -44,12 +43,19 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
         return;
     }
 
+    // --- REVISION #1: STRICT 6-DIGIT CHECK ---
+    if (paymentType === "PAID") {
+        if (!referenceNo || referenceNo.length !== 6 || isNaN(referenceNo)) {
+            alert("Please enter exactly the LAST 6 DIGITS of your GCash Reference Number.");
+            return;
+        }
+    }
+
     setIsSubmitting(true);
 
     try {
       const initialStatus = paymentType === "PAY_LATER" ? "PAY_LATER" : "PENDING";
 
-      // 1. Save EACH cart item to Firebase (Now includes Reference No)
       await Promise.all(
         cart.map(item =>
           addDoc(collection(db, "bookings"), {
@@ -60,7 +66,7 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
             price: item.price,
             customerName: name,
             customerContact: contact,
-            referenceNo: paymentType === "PAY_LATER" ? "N/A" : referenceNo, // Saved for Admin Dashboard
+            referenceNo: paymentType === "PAY_LATER" ? "N/A" : referenceNo, 
             paymentProof: paymentType === "PAY_LATER" ? "Pay Later Requested" : "Pending Verification",
             status: initialStatus, 
             createdAt: new Date(),
@@ -68,12 +74,10 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
         )
       );
 
-      // 2. Prepare Email Summary
       const bookingDetails = cart.map(item => 
         `Court ${item.court} on ${item.date} @ ${item.time}:00 (${item.duration}hrs)`
       ).join('\n');
 
-      // 3. Send Email to Admin
       await emailjs.send(
         SERVICE_ID,
         TEMPLATE_ID,
@@ -86,8 +90,6 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
         },
         PUBLIC_KEY
       );
-
-      // (REVISION #5: SMS Logic removed from here to prevent fake bookings. Moved to AdminDashboard.)
 
       const successMsg = paymentType === "PAY_LATER" 
         ? "Success! Your Pay Later request has been sent for approval." 
@@ -112,33 +114,23 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm">
       <div className="bg-zinc-900 rounded-3xl shadow-2xl w-full max-w-md border border-white/10 relative max-h-[90vh] overflow-y-auto flex flex-col">
 
-        {/* HEADER */}
         <div className="bg-zinc-950/80 p-6 flex justify-between items-center border-b border-white/5 sticky top-0 backdrop-blur-md z-10">
           <div>
             <h3 className="font-black text-xl text-white uppercase tracking-wide italic">Confirm Payment</h3>
             <p className="text-zinc-500 text-xs mt-1">Scan QR via GCash</p>
           </div>
-          <button
-            onClick={onClose}
-            className="bg-zinc-800 hover:bg-zinc-700 p-2 rounded-full text-zinc-400 hover:text-white transition"
-          >
+          <button onClick={onClose} className="bg-zinc-800 hover:bg-zinc-700 p-2 rounded-full text-zinc-400 hover:text-white transition">
             <X size={20} />
           </button>
         </div>
 
         <form className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
-
-          {/* QR SECTION */}
           <div className="flex flex-col items-center space-y-4 bg-zinc-800/30 p-4 rounded-2xl border border-white/5">
             <div className="p-2 bg-white rounded-xl">
               <img src="/gcash-qr.jpg" alt="GCash QR" className="w-40 h-40 rounded-lg object-contain" />
             </div>
 
-            <button
-              type="button"
-              onClick={handleCopyNumber}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 flex justify-between items-center hover:bg-zinc-700 transition group"
-            >
+            <button type="button" onClick={handleCopyNumber} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 flex justify-between items-center hover:bg-zinc-700 transition group">
               <span className="text-zinc-400 text-xs font-bold uppercase tracking-widest group-hover:text-white">Copy Number</span>
               <div className="flex items-center gap-2">
                 <span className="text-white font-mono font-bold">0917 591 7475</span>
@@ -148,7 +140,6 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
             <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">PJC GCASH (NORMAN PATRICK S.)</p>
           </div>
 
-          {/* CART SUMMARY */}
           <div className="space-y-2">
              <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-2">
                 <ShoppingCart size={14} /> Order Summary
@@ -170,32 +161,24 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
              </div>
           </div>
 
-          {/* INPUTS */}
           <div className="space-y-3 pt-2">
-            <input
-              required
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Full Name (for booking ref)"
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-lime-500 outline-none transition"
-            />
-            <input
-              required
-              value={contact}
-              onChange={e => setContact(e.target.value)}
-              placeholder="Mobile Number (e.g., 09171234567)"
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-lime-500 outline-none transition"
-            />
-            {/* REVISION #2: Transaction Reference Field */}
+            <input required value={name} onChange={e => setName(e.target.value)} placeholder="Full Name (for booking ref)" className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-lime-500 outline-none transition" />
+            <input required value={contact} onChange={e => setContact(e.target.value)} placeholder="Mobile Number (e.g., 09171234567)" className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-lime-500 outline-none transition" />
+            
+            {/* --- REVISION #1: UPDATED REF INPUT --- */}
             <input
               value={referenceNo}
-              onChange={e => setReferenceNo(e.target.value)}
-              placeholder="GCash Reference No. (If paid)"
+              onChange={e => {
+                  // Strips out letters/symbols and strictly limits to 6 characters
+                  const cleanValue = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setReferenceNo(cleanValue);
+              }}
+              placeholder="GCash Ref No. (LAST 6 DIGITS)"
+              maxLength={6}
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-lime-500 outline-none transition"
             />
           </div>
 
-          {/* REVISION #7: UPDATED DISCLAIMER TEXT */}
           <div className="bg-zinc-950/50 border border-yellow-500/20 rounded-xl p-4 text-[10px] text-zinc-400 leading-relaxed max-h-32 overflow-y-auto custom-scrollbar">
             <div className="flex items-center gap-2 mb-2 text-yellow-500 font-bold uppercase tracking-widest">
                 <AlertTriangle size={12} /> Booking & Payment Disclaimer
@@ -210,22 +193,11 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
             <p className="font-bold text-white mt-2">We will send you a confirmation SMS to your registered phone number once we approve your order.</p>
           </div>
 
-          {/* SUBMIT BUTTONS */}
           <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={(e) => handleSubmit(e, "PAY_LATER")}
-                disabled={isSubmitting}
-                className="w-1/3 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 rounded-xl text-xs uppercase tracking-widest disabled:opacity-50 transition-colors border border-zinc-700"
-              >
+              <button type="button" onClick={(e) => handleSubmit(e, "PAY_LATER")} disabled={isSubmitting} className="w-1/3 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 rounded-xl text-xs uppercase tracking-widest disabled:opacity-50 transition-colors border border-zinc-700">
                 Pay Later
               </button>
-              <button
-                type="button"
-                onClick={(e) => handleSubmit(e, "PAID")}
-                disabled={isSubmitting}
-                className="w-2/3 bg-lime-400 hover:bg-lime-300 text-black font-black py-4 rounded-xl text-sm uppercase tracking-widest disabled:opacity-50 transition-transform active:scale-95 shadow-lg shadow-lime-400/20"
-              >
+              <button type="button" onClick={(e) => handleSubmit(e, "PAID")} disabled={isSubmitting} className="w-2/3 bg-lime-400 hover:bg-lime-300 text-black font-black py-4 rounded-xl text-sm uppercase tracking-widest disabled:opacity-50 transition-transform active:scale-95 shadow-lg shadow-lime-400/20">
                 {isSubmitting ? "..." : "Confirm Payment"}
               </button>
           </div>
