@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { db } from '../firebase';
 import { collection, addDoc } from 'firebase/firestore';
-import { X, Copy, Check, ShoppingCart, AlertTriangle } from 'lucide-react';
+import { X, Copy, Check, ShoppingCart, AlertTriangle, Wallet } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 
 const SERVICE_ID = "service_2kiok8v";
@@ -14,6 +14,7 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [referenceNo, setReferenceNo] = useState(''); 
+  const [paymentChannel, setPaymentChannel] = useState('GCash'); // NEW: Default to GCash
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -30,6 +31,15 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // NEW: Helper function to swap the QR code image
+  const getQRCodeImage = () => {
+    switch (paymentChannel) {
+      case 'PayMaya': return '/maya-qr.jpg';
+      case 'Chinabank': return '/chinabank-qr.jpg';
+      default: return '/gcash-qr.jpg';
+    }
+  };
+
   const handleSubmit = async (e, paymentType = "PAID") => {
     e.preventDefault();
 
@@ -43,10 +53,9 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
         return;
     }
 
-    // --- REVISION #1: STRICT 6-DIGIT CHECK ---
     if (paymentType === "PAID") {
         if (!referenceNo || referenceNo.length !== 6 || isNaN(referenceNo)) {
-            alert("Please enter exactly the LAST 6 DIGITS of your GCash Reference Number.");
+            alert("Please enter exactly the LAST 6 DIGITS of your Reference Number.");
             return;
         }
     }
@@ -67,6 +76,7 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
             customerName: name,
             customerContact: contact,
             referenceNo: paymentType === "PAY_LATER" ? "N/A" : referenceNo, 
+            paymentChannel: paymentType === "PAY_LATER" ? "N/A" : paymentChannel, // NEW: Save channel to DB
             paymentProof: paymentType === "PAY_LATER" ? "Pay Later Requested" : "Pending Verification",
             status: initialStatus, 
             createdAt: new Date(),
@@ -117,7 +127,7 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
         <div className="bg-zinc-950/80 p-6 flex justify-between items-center border-b border-white/5 sticky top-0 backdrop-blur-md z-10">
           <div>
             <h3 className="font-black text-xl text-white uppercase tracking-wide italic">Confirm Payment</h3>
-            <p className="text-zinc-500 text-xs mt-1">Scan QR via GCash</p>
+            <p className="text-zinc-500 text-xs mt-1">Scan QR via {paymentChannel}</p>
           </div>
           <button onClick={onClose} className="bg-zinc-800 hover:bg-zinc-700 p-2 rounded-full text-zinc-400 hover:text-white transition">
             <X size={20} />
@@ -126,9 +136,28 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
 
         <form className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
           <div className="flex flex-col items-center space-y-4 bg-zinc-800/30 p-4 rounded-2xl border border-white/5">
-            <div className="p-2 bg-white rounded-xl">
-              <img src="/gcash-qr.jpg" alt="GCash QR" className="w-40 h-40 rounded-lg object-contain" />
+            
+            {/* NEW: Payment Channel Dropdown */}
+            <div className="w-full flex items-center gap-2 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2">
+                <Wallet size={16} className="text-lime-400" />
+                <select 
+                    value={paymentChannel}
+                    onChange={(e) => setPaymentChannel(e.target.value)}
+                    className="w-full bg-transparent text-white text-sm font-bold outline-none cursor-pointer"
+                >
+                    <option value="GCash" className="bg-zinc-900 text-white">GCash</option>
+                    <option value="PayMaya" className="bg-zinc-900 text-white">PayMaya</option>
+                    <option value="Chinabank" className="bg-zinc-900 text-white">Chinabank (InstaPay)</option>
+                </select>
             </div>
+
+              <div className="p-3 bg-white rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                <img 
+                  src={getQRCodeImage()} 
+                  alt={`${paymentChannel} QR`} 
+                  className="w-64 h-64 rounded-lg object-contain" 
+                />
+              </div>
 
             <button type="button" onClick={handleCopyNumber} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 flex justify-between items-center hover:bg-zinc-700 transition group">
               <span className="text-zinc-400 text-xs font-bold uppercase tracking-widest group-hover:text-white">Copy Number</span>
@@ -137,7 +166,7 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
                 {copied ? <Check size={16} className="text-lime-400" /> : <Copy size={16} className="text-zinc-500" />}
               </div>
             </button>
-            <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">PJC GCASH (NORMAN PATRICK S.)</p>
+            <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">PJC GCASH/MAYA (NORMAN PATRICK S.)</p>
           </div>
 
           <div className="space-y-2">
@@ -165,15 +194,13 @@ export default function PaymentModal({ isOpen, onClose, cart, totalPrice }) {
             <input required value={name} onChange={e => setName(e.target.value)} placeholder="Full Name (for booking ref)" className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-lime-500 outline-none transition" />
             <input required value={contact} onChange={e => setContact(e.target.value)} placeholder="Mobile Number (e.g., 09171234567)" className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-lime-500 outline-none transition" />
             
-            {/* --- REVISION #1: UPDATED REF INPUT --- */}
             <input
               value={referenceNo}
               onChange={e => {
-                  // Strips out letters/symbols and strictly limits to 6 characters
                   const cleanValue = e.target.value.replace(/\D/g, '').slice(0, 6);
                   setReferenceNo(cleanValue);
               }}
-              placeholder="GCash Ref No. (LAST 6 DIGITS)"
+              placeholder={`${paymentChannel} Ref No. (LAST 6 DIGITS)`}
               maxLength={6}
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-lime-500 outline-none transition"
             />

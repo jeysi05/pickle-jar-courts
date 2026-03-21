@@ -62,7 +62,6 @@ export default function AdminDashboard({ onLogout }) {
     .filter(b => b.status === 'booked_unpaid' || !b.status || b.status === 'PENDING' || b.status === 'PAY_LATER')
     .reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
 
-  // REVISION #3: Individual Google Calendar Link per Court
   const getGoogleCalendarLinkForItem = (item, group) => {
     try {
       const start = parseFloat(item.timeSlot);
@@ -81,7 +80,6 @@ export default function AdminDashboard({ onLogout }) {
 
       const isPaid = (group.overallStatus === 'PAY_LATER' || item.status === 'booked_unpaid' || item.status === 'PAY_LATER') ? 'UNPAID' : 'PAID';
       
-      // Formatting Title: [Court #] [Name] [PAID/UNPAID]
       const title = encodeURIComponent(`C${item.court} ${group.customerName} ${isPaid}`);
       const details = encodeURIComponent(`Customer: ${group.customerName}\nContact: ${group.customerContact}\nTotal Price: ₱${item.price}\nReference: ${item.referenceNo || 'N/A'}`);
       const location = encodeURIComponent("PDR Business Hub, Cabuyao");
@@ -93,28 +91,22 @@ export default function AdminDashboard({ onLogout }) {
     }
   };
 
-  // REVISION #4 & #5: Consolidated "Confirm Order" action that triggers SMS
   const handleConfirmOrder = async (group) => {
     try {
-      // 1. Update Firebase for ALL items
       await Promise.all(group.items.map(item => {
         const ref = doc(db, "bookings", item.id);
         const newStatus = (item.status === 'PAY_LATER' || item.status === 'booked_unpaid') ? 'booked_unpaid' : 'booked';
         return updateDoc(ref, { status: newStatus });
       }));
       
-      // 2. Format Exact SMS Requested by Sir Pat
       const API_KEY = "29a1827bca8ebef96d110e5920dea863";
-      const SENDER_NAME = "SEMAPHORE"; 
       
       const courtSummary = group.items.map(i => `${i.court}`).join(', ');
       
-      // Format Date to DD-Mmm-YY
       const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       const d = new Date(group.date);
       const formattedDate = `${String(d.getDate()).padStart(2, '0')}-${months[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`;
 
-      // Format Time beautifully
       const timeSummary = group.items.map(i => {
           const startHour = Math.floor(parseFloat(i.timeSlot));
           const startMins = parseFloat(i.timeSlot) % 1 === 0 ? "00" : "30";
@@ -123,7 +115,6 @@ export default function AdminDashboard({ onLogout }) {
           return `${dispStart}:${startMins} ${startAmPm}`;
       }).join(', ');
 
-      // REVISION #6: Exact SMS Template
       const smsMessage = `Hello, this is to confirm your reservation at Pickle Jar Courts!\n\nYour reservation details:\nName: ${group.customerName}\nCourt No.: ${courtSummary}\nDate and Time: ${formattedDate} @ ${timeSummary}\n\nThank you and see you on the court!`;
 
       const response = await fetch('https://api.semaphore.co/api/v4/messages', {
@@ -133,7 +124,6 @@ export default function AdminDashboard({ onLogout }) {
           'apikey': API_KEY,
           'number': group.customerContact,
           'message': smsMessage,
-          // 'sendername': SENDER_NAME
         })
       });
 
@@ -265,8 +255,11 @@ export default function AdminDashboard({ onLogout }) {
                                   <div className="flex items-center gap-1">
                                       <ShoppingCart size={10} /> C{item.court} @ {item.timeSlot} ({item.duration}h)
                                   </div>
+                                  {/* --- NEW: DISPLAYS THE PAYMENT CHANNEL AND REF NO --- */}
                                   {item.referenceNo && item.referenceNo !== "N/A" && (
-                                      <span className="text-[9px] font-mono text-zinc-500">Ref: {item.referenceNo}</span>
+                                      <span className="text-[9px] font-mono text-zinc-500 mt-1 block">
+                                          <span className="text-lime-400 font-bold">{item.paymentChannel || 'GCash'}</span> | Ref: {item.referenceNo}
+                                      </span>
                                   )}
                                 </div>
                                 
@@ -280,7 +273,6 @@ export default function AdminDashboard({ onLogout }) {
                                       {item.status === 'booked' ? 'PAID' : (item.status === 'booked_unpaid' || item.status === 'PAY_LATER') ? 'PAY LATER' : item.status}
                                   </span>
 
-                                  {/* REVISION #3: Individual Calendar Add Button */}
                                   <a 
                                     href={getGoogleCalendarLinkForItem(item, group)}
                                     target="_blank"
@@ -297,7 +289,6 @@ export default function AdminDashboard({ onLogout }) {
                   </td>
                   <td className="p-6 align-top font-mono text-lime-400 font-bold text-lg">₱{group.totalPrice}</td>
                   
-                  {/* REVISION #4: Streamlined Order Actions */}
                   <td className="p-6 align-top">
                     <div className="flex gap-2 justify-end">
                       <button 
