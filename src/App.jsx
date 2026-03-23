@@ -124,7 +124,8 @@ function App() {
   };
 
   const handleCoachLogin = () => {
-    if (prompt("Enter Coach Access Code:") === "coach2026") { 
+    // NEW: Pulls from your .env file instead of hardcoding "coach2026"
+    if (prompt("Enter Coach Access Code:") === import.meta.env.VITE_COACH_PASSWORD) { 
       setIsCoachMode(true);
       alert("Welcome Coach!");
     } else alert("Invalid Code");
@@ -387,4 +388,4 @@ function App() {
   );
 }
 
-export default App;
+export default App; 

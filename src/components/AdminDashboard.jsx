@@ -10,7 +10,8 @@ export default function AdminDashboard({ onLogout }) {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    if (password === 'admin123') { 
+    // NEW: Pulls from .env
+    if (password === import.meta.env.VITE_ADMIN_PASSWORD) { 
       setIsAuthenticated(true);
     } else {
       alert("Incorrect Password");
@@ -99,7 +100,7 @@ export default function AdminDashboard({ onLogout }) {
         return updateDoc(ref, { status: newStatus });
       }));
       
-      const API_KEY = "29a1827bca8ebef96d110e5920dea863";
+      const API_KEY = import.meta.env.VITE_SEMAPHORE_API_KEY;
       
       const courtSummary = group.items.map(i => `${i.court}`).join(', ');
       
