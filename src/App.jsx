@@ -4,35 +4,42 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import CourtCard from './components/CourtCard';
 import AdminDashboard from './components/AdminDashboard';
 import PaymentModal from './components/PaymentModal'; 
-import { MapPin, ShieldCheck, Lock, ShoppingCart, X, PlusCircle, Zap } from 'lucide-react';
+import { MapPin, ShieldCheck, ShoppingCart, X, PlusCircle, Zap } from 'lucide-react';
 
-const calculatePriceDetails = (startTime, duration, dateString, isCoach) => {
+const calculatePriceDetails = (startTime, duration, dateString) => {
   let date = new Date();
   if (dateString) {
     const [year, month, day] = dateString.split('-');
     date = new Date(year, month - 1, day);
   }
-  
   const dayOfWeek = date.getDay(); 
   const isMonThurs = dayOfWeek >= 1 && dayOfWeek <= 4;
-  const isWeekend = dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6;
+  const isFriday = dayOfWeek === 5;
+  const isWeekday = isMonThurs || isFriday;
   
   let segments = [];
-  let totalCalculatedPrice = 0;
+  let daytimePromoSegments = 0;
+  let eveningPromoSegments = 0;
 
+  // 1st Pass: Count how many hours fall into each promo window
   for (let t = startTime; t < startTime + duration; t += 0.5) {
-    let currentRate = 380; 
+    if (isWeekday && t >= 10 && t < 16) daytimePromoSegments += 0.5;
+    if (isMonThurs && t >= 16 && t < 22) eveningPromoSegments += 0.5;
+  }
+
+  // 2nd Pass: Assign rates based on the 2-hour minimum per bracket
+  let totalCalculatedPrice = 0;
+  for (let t = startTime; t < startTime + duration; t += 0.5) {
+    let currentRate = 350; // Standard Daily Rate
     let type = "Standard Rate";
 
-    if (isCoach) {
-      if (isMonThurs && t >= 8 && t < 24) { currentRate = 250; type = "Coach Off-Peak"; }
-      else if (isWeekend && t >= 8 && t < 12) { currentRate = 250; type = "Coach Off-Peak"; }
-      else { type = "Coach Standard"; }
-    } else {
-      if (isMonThurs && t >= 10 && t < 22 && duration >= 2) {
+    if (isWeekday && t >= 10 && t < 16 && daytimePromoSegments >= 2) {
+        currentRate = 200;
+        type = "Daytime Promo (₱200/hr)";
+    } 
+    else if (isMonThurs && t >= 16 && t < 22 && eveningPromoSegments >= 2) {
         currentRate = 250;
-        type = "Mon - Thurs(10am-10pm) Promo";
-      }
+        type = "Evening Promo (₱250/hr)";
     }
     
     let segmentPrice = currentRate * 0.5;
@@ -44,18 +51,18 @@ const calculatePriceDetails = (startTime, duration, dateString, isCoach) => {
   let bestBreakdown = [];
   let hasBundle = false;
 
-  if (!isCoach && duration >= 3) {
+  // Bundle Logic: ₱900 per 3 hours
+  if (duration >= 3) {
     const bundleSize = 6; 
     let bestBundleStartIndex = -1;
 
     for (let i = 0; i <= segments.length - bundleSize; i++) {
-      let priceWithThisBundle = 1000; 
+      let priceWithThisBundle = 900; 
       for (let j = 0; j < segments.length; j++) {
         if (j < i || j >= i + bundleSize) {
           priceWithThisBundle += segments[j].price;
         }
       }
-      
       if (priceWithThisBundle <= bestPrice) { 
         bestPrice = priceWithThisBundle;
         bestBundleStartIndex = i;
@@ -64,32 +71,32 @@ const calculatePriceDetails = (startTime, duration, dateString, isCoach) => {
     }
 
     if (hasBundle) {
-        bestBreakdown.push({ label: "3-Hour Bundle", price: 1000 });
-        let remainingPromo = 0;
-        let remainingStd = 0;
+        bestBreakdown.push({ label: "3-Hour Bundle Promo", price: 900 });
+        let rem200 = 0, rem250 = 0, remStd = 0;
         
         for (let j = 0; j < segments.length; j++) {
             if (j < bestBundleStartIndex || j >= bestBundleStartIndex + bundleSize) {
-                if (segments[j].type === "Mon - Thurs(10am-10pm) Promo") remainingPromo += 0.5;
-                else remainingStd += 0.5;
+                if (segments[j].type === "Daytime Promo (₱200/hr)") rem200 += 0.5;
+                else if (segments[j].type === "Evening Promo (₱250/hr)") rem250 += 0.5;
+                else remStd += 0.5;
             }
         }
-        if (remainingPromo > 0) bestBreakdown.push({ label: `${remainingPromo}h @ Mon-Thurs Promo (₱250/hr)`, price: remainingPromo * 250 });
-        if (remainingStd > 0) bestBreakdown.push({ label: `${remainingStd}h @ Standard (₱380/hr)`, price: remainingStd * 380 });
+        if (rem200 > 0) bestBreakdown.push({ label: `${rem200}h @ Daytime Promo`, price: rem200 * 200 });
+        if (rem250 > 0) bestBreakdown.push({ label: `${rem250}h @ Evening Promo`, price: rem250 * 250 });
+        if (remStd > 0) bestBreakdown.push({ label: `${remStd}h @ Standard (₱350/hr)`, price: remStd * 350 });
     }
   }
 
   if (!hasBundle) {
-      let counts = { "Standard Rate": 0, "Mon - Thurs(10am-10pm) Promo": 0, "Coach Standard": 0, "Coach Off-Peak": 0 };
+      let counts = { "Standard Rate": 0, "Daytime Promo (₱200/hr)": 0, "Evening Promo (₱250/hr)": 0 };
       segments.forEach(seg => counts[seg.type] += 0.5);
 
-      if (counts["Standard Rate"] > 0) bestBreakdown.push({ label: `${counts["Standard Rate"]}h @ Standard (₱380/hr)`, price: counts["Standard Rate"] * 380 });
-      if (counts["Mon - Thurs(10am-10pm) Promo"] > 0) bestBreakdown.push({ label: `${counts["Mon - Thurs(10am-10pm) Promo"]}h @ Mon-Thurs Promo (₱250/hr)`, price: counts["Mon - Thurs(10am-10pm) Promo"] * 250 });
-      if (counts["Coach Standard"] > 0) bestBreakdown.push({ label: `${counts["Coach Standard"]}h @ Coach Standard (₱380/hr)`, price: counts["Coach Standard"] * 380 });
-      if (counts["Coach Off-Peak"] > 0) bestBreakdown.push({ label: `${counts["Coach Off-Peak"]}h @ Coach Promo (₱250/hr)`, price: counts["Coach Off-Peak"] * 250 });
+      if (counts["Standard Rate"] > 0) bestBreakdown.push({ label: `${counts["Standard Rate"]}h @ Standard (₱350/hr)`, price: counts["Standard Rate"] * 350 });
+      if (counts["Daytime Promo (₱200/hr)"] > 0) bestBreakdown.push({ label: `${counts["Daytime Promo (₱200/hr)"]}h @ Daytime Promo (₱200/hr)`, price: counts["Daytime Promo (₱200/hr)"] * 200 });
+      if (counts["Evening Promo (₱250/hr)"] > 0) bestBreakdown.push({ label: `${counts["Evening Promo (₱250/hr)"]}h @ Evening Promo (₱250/hr)`, price: counts["Evening Promo (₱250/hr)"] * 250 });
   }
 
-  const basePrice = duration * 380;
+  const basePrice = duration * 350;
   const isDiscounted = bestPrice < basePrice;
 
   return { total: bestPrice, breakdown: bestBreakdown, isDiscounted };
@@ -97,7 +104,6 @@ const calculatePriceDetails = (startTime, duration, dateString, isCoach) => {
 
 function App() {
   const [isAdminMode, setIsAdminMode] = useState(false);
-  const [isCoachMode, setIsCoachMode] = useState(false); 
   const [cart, setCart] = useState([]); 
   const [currentSelection, setCurrentSelection] = useState(null); 
   const [duration, setDuration] = useState(1); 
@@ -123,14 +129,6 @@ function App() {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  const handleCoachLogin = () => {
-    // NEW: Pulls from your .env file instead of hardcoding "coach2026"
-    if (prompt("Enter Coach Access Code:") === import.meta.env.VITE_COACH_PASSWORD) { 
-      setIsCoachMode(true);
-      alert("Welcome Coach!");
-    } else alert("Invalid Code");
-  };
-
   const handleSlotClick = (courtId, timeSlot, date) => {
     setCurrentSelection({ court: courtId, time: timeSlot, date: date });
     setDuration(1);
@@ -149,7 +147,7 @@ function App() {
       time: currentSelection.time,
       date: currentSelection.date,
       duration: duration,
-      price: calculatePriceDetails(currentSelection.time, duration, currentSelection.date, isCoachMode).total
+      price: calculatePriceDetails(currentSelection.time, duration, currentSelection.date).total
     };
 
     const isOverlap = cart.some(item => 
@@ -179,15 +177,13 @@ function App() {
   let availableDurations = [];
 
   if (currentSelection) {
-    priceInfo = calculatePriceDetails(currentSelection.time, duration, currentSelection.date, isCoachMode);
+    priceInfo = calculatePriceDetails(currentSelection.time, duration, currentSelection.date);
 
     const activeBookings = [...liveBookings.filter(b => b.status !== 'cancelled'), ...cart].filter(
       b => b.court === currentSelection.court && b.date === currentSelection.date
     );
     
-    // BUG FIX: Parse the time safely whether it's an int from Cart or string from Firebase
     const getStartTime = (b) => b.time !== undefined ? b.time : parseFloat(b.timeSlot);
-
     const futureBookings = activeBookings.filter(b => getStartTime(b) > currentSelection.time);
     
     let nextBookingTime = 24; 
@@ -208,27 +204,21 @@ function App() {
       <div className="fixed inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none z-0"></div>
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] z-0 pointer-events-none"></div>
       
-      <div className={`fixed top-[-10%] left-[10%] w-[600px] h-[600px] rounded-full blur-[150px] pointer-events-none z-0 opacity-40 animate-pulse transition-colors duration-1000 ${isCoachMode ? 'bg-yellow-500/20' : 'bg-lime-500/20'}`}></div>
-      <div className={`fixed bottom-[-10%] right-[10%] w-[400px] h-[400px] rounded-full blur-[120px] pointer-events-none z-0 opacity-20 transition-colors duration-1000 ${isCoachMode ? 'bg-orange-500/10' : 'bg-emerald-500/10'}`}></div>
+      {/* FIXED: Removed isCoachMode from classes to prevent crash */}
+      <div className="fixed top-[-10%] left-[10%] w-[600px] h-[600px] rounded-full blur-[150px] pointer-events-none z-0 opacity-40 animate-pulse bg-lime-500/20"></div>
+      <div className="fixed bottom-[-10%] right-[10%] w-[400px] h-[400px] rounded-full blur-[120px] pointer-events-none z-0 opacity-20 bg-emerald-500/10"></div>
 
       <div className="relative z-10 pb-48"> 
         <nav className="border-b border-white/10 backdrop-blur-md sticky top-0 z-50 bg-zinc-950/80">
           <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className={`h-10 w-10 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(132,204,22,0.3)] ${isCoachMode ? 'bg-yellow-400 shadow-yellow-400/20' : 'bg-lime-400 shadow-lime-400/20'}`}>
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-lime-400 shadow-[0_0_20px_rgba(132,204,22,0.3)]">
                 <span className="text-black font-black text-xl">P</span>
               </div>
-              <span className="font-bold text-white text-xl tracking-tight">Pickle<span className={isCoachMode ? 'text-yellow-400' : 'text-lime-400'}>Jar</span>Courts</span>
+              <span className="font-bold text-white text-xl tracking-tight">Pickle<span className="text-lime-400">Jar</span>Courts</span>
             </div>
             
             <div className="flex gap-3">
-              {isCoachMode ? (
-                 <button onClick={() => setIsCoachMode(false)} className="text-[10px] font-black text-red-400 bg-red-500/10 px-4 py-2 rounded-full border border-red-500/20 hover:bg-red-500/20 transition">EXIT COACH MODE</button>
-              ) : (
-                <button onClick={handleCoachLogin} className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 hover:text-white uppercase tracking-widest bg-zinc-900 px-4 py-2 rounded-lg border border-white/5 transition">
-                    <Lock size={12}/> Coach
-                </button>
-              )}
               <button onClick={() => setIsAdminMode(true)} className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 hover:text-white uppercase tracking-widest bg-zinc-900 px-4 py-2 rounded-lg border border-white/5 transition">
                 <ShieldCheck size={12}/> Admin
               </button>
@@ -237,17 +227,17 @@ function App() {
         </nav>
 
         <div className="pt-16 pb-10 text-center px-4">
-          <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest mb-8 ${isCoachMode ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400' : 'border-lime-500/30 bg-lime-500/10 text-lime-400'}`}>
-            {isCoachMode ? "Coach Rates Active" : "Live Bookings Active"}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-lime-500/30 bg-lime-500/10 text-lime-400 text-[10px] font-black uppercase tracking-widest mb-8">
+            Live Bookings Active
           </div>
 
           <h1 className="text-5xl md:text-7xl font-black text-white mb-6 tracking-tighter leading-[0.9]">
             RESERVE YOUR <br className="hidden md:block"/>
-            <span className={`text-transparent bg-clip-text bg-gradient-to-r ${isCoachMode ? 'from-yellow-300 via-orange-400 to-yellow-500' : 'from-lime-300 via-green-400 to-lime-500'}`}>WINNING MOMENT</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-lime-300 via-green-400 to-lime-500">WINNING MOMENT</span>
           </h1>
 
           <div className="flex items-center justify-center gap-2 text-zinc-500 mb-16 font-medium text-xs uppercase tracking-widest">
-            <MapPin className={`w-3 h-3 ${isCoachMode ? 'text-yellow-400' : 'text-lime-400'}`} /> PDR Business Hub, Cabuyao
+            <MapPin className="w-3 h-3 text-lime-400" /> PDR Business Hub, Cabuyao
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 max-w-[98rem] mx-auto px-4">
@@ -256,10 +246,8 @@ function App() {
                 key={courtNum}
                 courtName={`Court ${courtNum}`} 
                 image={`/court${courtNum > 3 ? 2 : courtNum}.jpg`} 
-                isCoachMode={isCoachMode}
                 cart={cart}
                 currentSelection={currentSelection}
-                currentDuration={duration}
                 onSlotSelect={handleSlotClick} 
                 courtId={courtNum}
                 existingBookings={liveBookings}
@@ -289,7 +277,7 @@ function App() {
                     {currentSelection && (
                         <div className="flex flex-col md:flex-row justify-between items-center gap-6 animate-in slide-in-from-bottom duration-300">
                             <div className="flex items-center gap-4">
-                                <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${isCoachMode ? 'bg-yellow-500/20 text-yellow-400' : 'bg-lime-500/20 text-lime-400'}`}>
+                                <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-lime-500/20 text-lime-400">
                                     <Zap size={24} fill="currentColor" />
                                 </div>
                                 <div>
@@ -300,7 +288,6 @@ function App() {
                                     <div className="flex flex-wrap items-center gap-4 mt-2">
                                         <div className="flex items-center gap-2">
                                             <p className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Duration:</p>
-                                            
                                             <select 
                                                 value={duration} 
                                                 onChange={(e) => setDuration(parseFloat(e.target.value))}
@@ -322,7 +309,7 @@ function App() {
                             <div className="flex items-center justify-between w-full md:w-auto gap-4 mt-4 md:mt-0">
                               <div className="text-left md:text-right relative group cursor-help">
                                   <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest flex items-center justify-start md:justify-end gap-1">
-                                      {priceInfo.isDiscounted && !isCoachMode && (
+                                      {priceInfo.isDiscounted && (
                                           <span className="bg-lime-500 text-black px-1.5 py-0.5 rounded-[4px] text-[8px] animate-pulse">
                                               BEST RATE APPLIED
                                           </span>
@@ -330,7 +317,7 @@ function App() {
                                       Block Price
                                       <span className="text-[8px] border border-zinc-600 rounded-full w-3 h-3 flex items-center justify-center opacity-50 ml-1 group-hover:opacity-100">?</span>
                                   </p>
-                                  <p className={`text-3xl font-black ${isCoachMode ? 'text-yellow-400' : 'text-lime-400'}`}>
+                                  <p className="text-3xl font-black text-lime-400">
                                       ₱{priceInfo.total}
                                   </p>
 
@@ -355,7 +342,7 @@ function App() {
                     {!currentSelection && cart.length > 0 && (
                         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                             <div className="flex items-center gap-3 overflow-x-auto max-w-full md:max-w-3xl py-2">
-                                <div className={`flex items-center gap-2 font-black uppercase italic tracking-tighter mr-4 ${isCoachMode ? 'text-yellow-400' : 'text-lime-400'}`}>
+                                <div className="flex items-center gap-2 font-black uppercase italic tracking-tighter mr-4 text-lime-400">
                                     <ShoppingCart size={20} /> Cart ({cart.length})
                                 </div>
                                 {cart.map((item) => (
@@ -370,9 +357,9 @@ function App() {
                             <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
                                 <div className="text-right">
                                     <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Total Due</p>
-                                    <p className={`text-3xl font-black ${isCoachMode ? 'text-yellow-400' : 'text-lime-400'}`}>₱{cartTotal}</p>
+                                    <p className="text-3xl font-black text-lime-400">₱{cartTotal}</p>
                                 </div>
-                                <button onClick={() => setShowPaymentModal(true)} className={`px-8 py-4 rounded-xl font-black uppercase tracking-widest hover:scale-105 transition-transform ${isCoachMode ? 'bg-yellow-400 text-black shadow-yellow-400/20 shadow-lg' : 'bg-lime-400 text-black shadow-lime-400/20 shadow-lg'}`}>
+                                <button onClick={() => setShowPaymentModal(true)} className="px-8 py-4 rounded-xl font-black uppercase tracking-widest hover:scale-105 transition-transform bg-lime-400 text-black shadow-lime-400/20 shadow-lg">
                                     Checkout
                                 </button>
                             </div>
@@ -383,9 +370,9 @@ function App() {
         </div>
       )}
 
-      {showPaymentModal && <PaymentModal cart={cart} totalPrice={cartTotal} onClose={() => setShowPaymentModal(false)} setCart={setCart} isCoachMode={isCoachMode} />}
+      {showPaymentModal && <PaymentModal cart={cart} totalPrice={cartTotal} onClose={() => setShowPaymentModal(false)} setCart={setCart} />}
     </div>
   );
 }
 
-export default App; 
+export default App;

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function CourtCard({ courtName, image, cart, currentSelection, currentDuration, startTimeOffset = 0, onSlotSelect, courtId, isCoachMode, existingBookings = [] }) {
+export default function CourtCard({ courtName, image, cart, currentSelection, onSlotSelect, courtId, existingBookings = [] }) {
   
   const getLocalTodayString = () => {
     const t = new Date();
@@ -39,8 +39,7 @@ export default function CourtCard({ courtName, image, cart, currentSelection, cu
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col group hover:border-lime-500/30 transition-all duration-300 hover:shadow-[0_0_30px_rgba(0,0,0,0.5)] relative">
-        
-        <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent ${isCoachMode ? 'via-yellow-500' : 'via-lime-500'} to-transparent opacity-50 group-hover:opacity-100 transition-opacity`}></div>
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-lime-500 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
 
         <div className="h-40 overflow-hidden relative bg-zinc-900">
           <img src={image} alt={courtName} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-60 group-hover:opacity-90 grayscale group-hover:grayscale-0" />
@@ -63,14 +62,12 @@ export default function CourtCard({ courtName, image, cart, currentSelection, cu
                 {generateTimeSlots().map((time) => {
                     const isPast = isSlotPast(time);
                     
-                    // 1. Check local cart
                     const cartItem = cart.find(item => 
                         item.court === courtId && 
                         item.date === selectedDate &&
                         time >= item.time && time < (item.time + item.duration)
                     );
 
-                    // 2. Check DB
                     const dbItem = existingBookings.find(item => {
                         if (item.court !== courtId || item.date !== selectedDate || item.status === 'cancelled') return false;
                         const itemStart = parseFloat(item.timeSlot);
@@ -82,22 +79,15 @@ export default function CourtCard({ courtName, image, cart, currentSelection, cu
                     let isOccupiedStart = false;
                     let isOccupiedTrail = false;
 
-                    // BUG FIX: Only flag the exact start time as "Occupied" (green), make the rest dimmed.
                     if (occupyingItem) {
                         const itemStart = occupyingItem.time !== undefined ? occupyingItem.time : parseFloat(occupyingItem.timeSlot);
-                        if (time === itemStart) {
-                            isOccupiedStart = true;
-                        } else {
-                            isOccupiedTrail = true;
-                        }
+                        if (time === itemStart) isOccupiedStart = true;
+                        else isOccupiedTrail = true;
                     }
 
-                    // Strict preview highlight for ONLY the clicked start time
                     let isPreview = false;
                     if (currentSelection?.court === courtId && currentSelection?.date === selectedDate) {
-                        if (time === currentSelection.time) {
-                            isPreview = true;
-                        }
+                        if (time === currentSelection.time) isPreview = true;
                     }
 
                     let btnClass = 'bg-zinc-800 border-white/5 text-zinc-300 hover:bg-zinc-700 hover:text-white hover:border-white/20'; 
@@ -105,11 +95,8 @@ export default function CourtCard({ courtName, image, cart, currentSelection, cu
                     if (isPast) {
                         btnClass = 'bg-zinc-950 text-zinc-700 border-transparent cursor-not-allowed opacity-50';
                     } else if (isOccupiedStart) {
-                        btnClass = isCoachMode 
-                            ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500 cursor-not-allowed'
-                            : 'bg-lime-500/10 border-lime-500/30 text-lime-400 cursor-not-allowed';
+                        btnClass = 'bg-lime-500/10 border-lime-500/30 text-lime-400 cursor-not-allowed';
                     } else if (isOccupiedTrail) {
-                        // Dimmed out slots for the remainder of a long booking
                         btnClass = 'bg-zinc-900/50 text-zinc-600 border-transparent cursor-not-allowed opacity-40';
                     } else if (isPreview) {
                         btnClass = 'bg-white text-black border-white animate-pulse shadow-[0_0_15px_rgba(255,255,255,0.4)] scale-105 z-10'; 
@@ -131,4 +118,4 @@ export default function CourtCard({ courtName, image, cart, currentSelection, cu
         </div>
     </div>
   );
-} 
+}
